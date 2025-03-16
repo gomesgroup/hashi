@@ -1,0 +1,182 @@
+version: '3.8'
+
+services:
+  # ===== Application Service =====
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      target: ${DOCKER_TARGET:-production}
+    image: hashi-app:${TAG:-latest}
+    container_name: hashi-app
+    restart: unless-stopped
+    env_file: 
+      - .env
+    ports:
+      - "${PORT:-3000}:3000"
+      - "${WEBSOCKET_PORT:-3001}:3001"
+    volumes:
+      - ${CHIMERAX_PATH:-/opt/chimerax}:/opt/chimerax:ro
+      - app-storage:/app/storage
+      - app-snapshots:/app/snapshots
+      - app-logs:/app/logs
+    depends_on:
+      - db
+    networks:
+      - hashi-network
+    healthcheck:
+      test: ["CMD", "node", "/app/dist/scripts/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.5'
+        reservations:
+          memory: 500M
+          cpus: '0.5'
+      
+  # ===== Database Service =====
+  db:
+    image: postgres:14-alpine
+    container_name: hashi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_DATABASE:-hashi}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - hashi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-hashi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 256M
+          cpus: '0.2'
+
+  # ===== Monitoring Services =====
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hashi-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - hashi-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hashi-grafana
+    restart: unless-stopped
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    ports:
+      - "3002:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - hashi-network
+    profiles:
+      - monitoring
+
+  # ===== Logging Services =====
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    container_name: hashi-elasticsearch
+    restart: unless-stopped
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "discovery.type=single-node"
+      - "xpack.security.enabled=false"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - hashi-network
+    profiles:
+      - logging
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.0
+    container_name: hashi-logstash
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline
+      - ./monitoring/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - app-logs:/logs
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    depends_on:
+      - elasticsearch
+    networks:
+      - hashi-network
+    profiles:
+      - logging
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    container_name: hashi-kibana
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - hashi-network
+    profiles:
+      - logging
+
+# ===== Networks =====
+networks:
+  hashi-network:
+    driver: bridge
+
+# ===== Volumes =====
+volumes:
+  db-data:
+  app-storage:
+  app-snapshots:
+  app-logs:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:
