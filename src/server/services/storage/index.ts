@@ -3,7 +3,7 @@ import path from 'path';
 import { promisify } from 'util';
 import { v4 as uuid } from 'uuid';
 import config from '../../config';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import { repositories } from '../../database/repositories';
 
 const mkdir = promisify(fs.mkdir);

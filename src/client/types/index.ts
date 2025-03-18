@@ -16,12 +16,15 @@ export enum SessionStatus {
 
 export interface SessionContextProps {
   session: Session | null;
+  activeSession?: Session | null;
+  sessions?: Session[];  // List of all sessions
   isLoading: boolean;
   error: string | null;
   createSession: () => Promise<Session | null>;
   getSession: (sessionId: string) => Promise<Session | null>;
   refreshSession: (sessionId: string) => Promise<boolean>;
   closeSession: (sessionId: string) => Promise<boolean>;
+  fetchSessions?: () => Promise<Session[]>;  // Method to fetch all sessions
   resetError: () => void;
 }
 
@@ -31,12 +34,14 @@ export interface Structure {
   name: string;
   format: string;
   path: string;
+  uploadDate?: string;
   metadata: StructureMetadata;
 }
 
 export interface StructureMetadata {
   atomCount: number;
-  bondCount: number;
+  bondCount?: number;
+  bonds?: number;
   residueCount: number;
   chainCount: number;
   title?: string;
@@ -49,13 +54,13 @@ export interface StructureMetadata {
 
 export interface Atom {
   id: number;
-  name: string;
+  name?: string;
   element: string;
   x: number;
   y: number;
   z: number;
-  residueId: number;
-  chainId: string;
+  residueId?: number;
+  chainId?: string;
   bFactor?: number;
   charge?: number;
   occupancy?: number;
@@ -73,14 +78,16 @@ export interface Residue {
   id: number;
   name: string;
   chainId: string;
-  sequence: number;
-  atoms: number[];
+  number?: number;
+  sequence?: number;
+  atoms?: number[];
 }
 
 export interface Chain {
   id: string;
   name: string;
-  residues: number[];
+  residueCount?: number;
+  residues?: number[];
 }
 
 // Error Context Types

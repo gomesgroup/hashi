@@ -5,12 +5,12 @@ Hashi is a web application that integrates with UCSF ChimeraX to provide molecul
 
 The project follows a three-tier architecture:
 
-1. **React Frontend** - User interface with WebGL visualization
+1. **React Frontend** - User interface with WebGL visualization and fallback mechanisms
 2. **Node.js Backend** - API endpoints and ChimeraX process management
 3. **ChimeraX Engine** - Headless processes for molecular operations
 
 Hashi enables users to:
-- Visualize molecular structures from various file formats (PDB, SDF, MOL, CIF, XYZ)
+- Visualize molecular structures from various file formats (PDB, SDF, MOL, CIF, XYZ) with robust fallback mechanisms
 - Run ChimeraX commands via a web interface
 - Manage user sessions with up to 10 concurrent ChimeraX instances
 - Generate high-quality snapshots and movies for visualization
@@ -46,10 +46,19 @@ open http://localhost:3000
   /src
     /client            # React frontend 
       /components      # Reusable UI components
+        /MolecularViewer.tsx    # Three.js based 3D renderer
+        /StructureRenderer.tsx  # Multi-mode renderer with fallbacks
+        /StructurePlaceholder.tsx # Placeholder component
+        /EnhancedViewerControls.tsx # Controls with fallback support
       /contexts        # React contexts for state management
       /hooks           # Custom React hooks
+        /useChimeraX.ts         # ChimeraX interaction hook
+        /useStructure.ts        # Structure data handling
       /pages           # Top-level page components
+        /StructureViewer.tsx    # Structure viewing page with fallbacks
       /services        # API client services
+        /chimeraxService.ts     # ChimeraX API client
+        /structureService.ts    # Structure data service
       /styles          # Global styles
       /types           # TypeScript type definitions
       /utils           # Utility functions
@@ -150,11 +159,29 @@ open http://localhost:3000
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
+   # Make sure to set CHIMERAX_PATH to your ChimeraX installation
    ```
 
 4. Start development servers
    ```bash
    npm run dev
+   ```
+
+5. Test ChimeraX connectivity
+   ```bash
+   # Run the simplified development server for testing ChimeraX integration
+   node dev-server.js
+   
+   # In another terminal, test the ChimeraX connection
+   curl http://localhost:4000/api/chimerax/status
+   
+   # Start ChimeraX process
+   curl -X POST http://localhost:4000/api/chimerax/start
+   
+   # Send a command to ChimeraX
+   curl -X POST -H "Content-Type: application/json" \
+     -d '{"command": "open 1abc"}' \
+     http://localhost:4000/api/chimerax/command
    ```
 
 ## Production Deployment
@@ -199,6 +226,7 @@ Hashi comes with a complete monitoring stack:
 ### User Documentation
 - [Getting Started](docs/user_guide/getting_started.md)
 - [Structure Visualization](docs/user_guide/structure_visualization.md)
+- [Rendering Fallback Mechanisms](docs/user_guide/rendering_fallbacks.md)
 - [File Management](docs/user_guide/file_management.md)
 
 ### Administrator Documentation
@@ -212,16 +240,32 @@ Hashi comes with a complete monitoring stack:
 - [Authentication](docs/api_guide/authentication.md)
 - [Sessions API](docs/api_guide/sessions.md)
 - [Structures API](docs/api_guide/structures.md)
+- [Error Handling System](docs/error_handling.md)
+- [Authentication API](docs/authentication_api.md)
+- [Structure Modification API](docs/structure_modification_api.md)
+- [Structure Retrieval API](docs/structure_retrieval_api.md)
+- [Security Implementation](docs/security_implementation.md)
 
 ### Development Documentation
 - [Architecture Overview](docs/dev_guide/architecture.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 - [Testing Guide](docs/dev_guide/testing.md)
+- [ChimeraX Integration](docs/mvp/CHIMERAX_INTEGRATION_DOCS.md)
+
+## Rendering Fallback Mechanisms
+
+Hashi implements a robust three-tiered fallback mechanism for molecular visualization:
+
+1. **ChimeraX Server Rendering** (Primary): Uses ChimeraX's powerful rendering capabilities with OSMesa for offscreen rendering
+2. **Three.js WebGL Rendering** (First Fallback): Provides client-side 3D visualization using Three.js when ChimeraX rendering is unavailable
+3. **Static Image Fallback** (Second Fallback): Sources pre-rendered images from RCSB PDB and other molecular databases when neither interactive option is available
+
+This approach ensures users have access to molecular visualizations regardless of server configuration or client device capabilities. The system automatically detects the best available rendering method and transitions seamlessly between them.
 
 ## Testing
 The project has a comprehensive testing suite including unit tests, integration tests, end-to-end tests, performance tests, and security tests. All tests are fully integrated with CI/CD.
 
-Available test commands:
+### Test Commands
 ```bash
 # Run all tests with Jest
 npm test
@@ -238,7 +282,35 @@ npm run test:all
 
 # Generate test coverage report
 npm run test:coverage
+
+# Run OSMesa-specific tests
+npm test -- -t "OSMesa"
 ```
+
+### Testing OSMesa and ChimeraX
+The project includes specialized tests for ChimeraX integration and OSMesa rendering:
+
+1. **Dependency Verification**: Run `./scripts/verify-dependencies.sh` to check if ChimeraX and OSMesa are properly installed and configured.
+
+2. **Mock Environment Testing**: Use the `ChimeraXMockUtil` to simulate different environments:
+   ```typescript
+   import ChimeraXMockUtil, { ChimeraXEnvironment } from './tests/mocks/chimeraxMock';
+   
+   // Test with OSMesa available
+   ChimeraXMockUtil.setEnvironment(ChimeraXEnvironment.FULL_RENDERING);
+   
+   // Test without OSMesa
+   ChimeraXMockUtil.setEnvironment(ChimeraXEnvironment.NO_OSMESA);
+   
+   // Test without ChimeraX
+   ChimeraXMockUtil.setEnvironment(ChimeraXEnvironment.NO_CHIMERAX);
+   ```
+
+3. **Fallback Testing**: Test visualization fallback mechanisms for scenarios where OSMesa rendering is unavailable.
+
+For detailed information on testing OSMesa integration, see:
+- [OSMesa Testing Strategy](/docs/testing/OSMesa_TESTING_STRATEGY.md)
+- [Debugging OSMesa](/docs/testing/DEBUGGING_OSMESA.md)
 
 ## Contributing
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.

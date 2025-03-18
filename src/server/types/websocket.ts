@@ -62,6 +62,7 @@ export interface WebSocketMessage {
   timestamp: string;
   priority: WebSocketMessagePriority;
   sessionId?: string;
+  payload?: any; // Adding optional payload to base interface
 }
 
 /**

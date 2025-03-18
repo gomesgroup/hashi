@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empty Test Page</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border: 1px solid #ddd;
+            max-height: 300px;
+            overflow: auto;
+        }
+        #testStatus {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Basic HTML Test Page</h1>
+    <p>This page tests if basic HTML and JavaScript are working correctly.</p>
+    
+    <div>
+        <button id="testBtn">Test JavaScript</button>
+        <button id="testFetch">Test Fetch API</button>
+        <button id="testCors">Test CORS Request</button>
+        <button id="checkElements">Check DOM Elements</button>
+    </div>
+    
+    <div id="testStatus" class="info">Click a button to run a test</div>
+    
+    <h3>Test Results:</h3>
+    <pre id="testResults"></pre>
+    
+    <script>
+        // DOM elements
+        const testBtn = document.getElementById('testBtn');
+        const testFetch = document.getElementById('testFetch');
+        const testCors = document.getElementById('testCors');
+        const checkElements = document.getElementById('checkElements');
+        const testStatus = document.getElementById('testStatus');
+        const testResults = document.getElementById('testResults');
+        
+        // Function to update status
+        function updateStatus(message, type) {
+            testStatus.textContent = message;
+            testStatus.className = type;
+        }
+        
+        // Function to log results
+        function logResult(message) {
+            const timestamp = new Date().toISOString().substr(11, 8);
+            testResults.textContent += `[${timestamp}] ${message}\n`;
+            testResults.scrollTop = testResults.scrollHeight;
+        }
+        
+        // Test JavaScript
+        testBtn.addEventListener('click', () => {
+            try {
+                updateStatus('Testing JavaScript...', 'info');
+                
+                // Test basic operations
+                const a = 5;
+                const b = 10;
+                const c = a + b;
+                
+                logResult(`JavaScript test: 5 + 10 = ${c}`);
+                updateStatus('JavaScript is working correctly!', 'success');
+                
+            } catch (error) {
+                updateStatus(`JavaScript error: ${error.message}`, 'error');
+                logResult(`Error: ${error.message}`);
+            }
+        });
+        
+        // Test Fetch API
+        testFetch.addEventListener('click', async () => {
+            try {
+                updateStatus('Testing Fetch API...', 'info');
+                
+                // Try to fetch a local file
+                const response = await fetch('empty-test.html');
+                const text = await response.text();
+                
+                logResult(`Fetch API test: Successfully fetched ${text.length} characters`);
+                updateStatus('Fetch API is working correctly!', 'success');
+                
+            } catch (error) {
+                updateStatus(`Fetch API error: ${error.message}`, 'error');
+                logResult(`Error: ${error.message}`);
+            }
+        });
+        
+        // Test CORS
+        testCors.addEventListener('click', async () => {
+            try {
+                updateStatus('Testing CORS with ChimeraX server...', 'info');
+                
+                // Try to fetch from ChimeraX server
+                const response = await fetch('http://localhost:9876/api/health');
+                const data = await response.json();
+                
+                logResult(`CORS test: Response from server: ${JSON.stringify(data)}`);
+                updateStatus('CORS request completed successfully!', 'success');
+                
+            } catch (error) {
+                updateStatus(`CORS error: ${error.message}`, 'error');
+                logResult(`Error: ${error.message}`);
+            }
+        });
+        
+        // Check DOM Elements
+        checkElements.addEventListener('click', () => {
+            try {
+                updateStatus('Checking DOM elements...', 'info');
+                
+                // Get all page elements
+                const allElements = document.querySelectorAll('*');
+                
+                logResult(`DOM test: Found ${allElements.length} elements on the page`);
+                logResult(`Body child elements: ${document.body.children.length}`);
+                
+                // Log specific elements
+                for (let i = 0; i < document.body.children.length; i++) {
+                    const element = document.body.children[i];
+                    logResult(`- Element ${i}: <${element.tagName.toLowerCase()}> ${element.className || '(no class)'}`);
+                }
+                
+                updateStatus('DOM check completed successfully!', 'success');
+                
+            } catch (error) {
+                updateStatus(`DOM check error: ${error.message}`, 'error');
+                logResult(`Error: ${error.message}`);
+            }
+        });
+        
+        // Run a basic test on load
+        window.addEventListener('DOMContentLoaded', () => {
+            logResult('Page loaded successfully');
+            logResult(`User Agent: ${navigator.userAgent}`);
+            logResult(`Window size: ${window.innerWidth}x${window.innerHeight}`);
+        });
+    </script>
+</body>
+</html>

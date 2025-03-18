@@ -9,8 +9,13 @@ The ChimeraX Process Manager is responsible for managing the lifecycle of Chimer
 - Track processes by session ID and map them to ports/PIDs
 - Handle process initialization, monitoring, and termination
 - Implement timeout detection for idle processes
-- Provide error handling and recovery mechanisms
+- Provide robust error handling and recovery mechanisms
 - Ensure proper resource management and logging
+- Support cross-platform compatibility (macOS and Linux)
+- Multi-layered rendering fallback system:
+  - **Primary**: OSMesa offscreen rendering for best performance
+  - **Fallback 1**: Xvfb virtual display when OSMesa is unavailable
+  - **Fallback 2**: Placeholder images when both rendering methods fail
 
 ## API Reference
 
@@ -170,11 +175,17 @@ The ChimeraX Process Manager exposes the following REST API endpoints:
 
 ### Process Spawning
 
-ChimeraX processes are spawned using Node.js's `child_process.spawn` method with the following flags:
+ChimeraX processes are spawned using Node.js's `child_process.spawn` method. The command is configured based on the available rendering capabilities of the system:
 
 ```
-chimerax --nogui --offscreen --nosilent --noexit --cmd "remotecontrol rest start port <PORT> json true"
+chimerax --nogui --offscreen --noexit [--osmesa] [--silent|--nosilent] --cmd "remotecontrol rest start port <PORT> json true"
 ```
+
+- `--osmesa` flag is added when OSMesa libraries are available
+- `--silent` is used in production, while `--nosilent` is used in debug mode
+- Additional environment variables are set based on platform and rendering capabilities
+
+The process manager automatically detects the platform (macOS/Linux) and adjusts the configuration accordingly. It tests for OSMesa availability and falls back to Xvfb if necessary.
 
 ### Port Management
 
@@ -192,9 +203,12 @@ The ChimeraX Process Manager can automatically terminate processes that have bee
 
 The ChimeraX Process Manager is configured using environment variables:
 
-- `CHIMERAX_PATH`: Path to the ChimeraX executable
+- `CHIMERAX_PATH`: Path to the ChimeraX executable (auto-detected if not specified)
 - `CHIMERAX_BASE_PORT`: Base port number for ChimeraX REST APIs (default: 6100)
 - `MAX_CHIMERAX_INSTANCES`: Maximum number of concurrent ChimeraX instances (default: 10)
+- `OSMESA_AVAILABLE`: Set to 'true' if OSMesa libraries are available
+- `DISPLAY`: X11 display for Xvfb fallback rendering (e.g., ':99')
+- `DEBUG_CHIMERAX`: Set to 'true' to enable detailed logging of ChimeraX operations
 
 These settings can be adjusted in the `.env` file to match your system's capabilities and ChimeraX installation.
 
@@ -204,9 +218,19 @@ These settings can be adjusted in the `.env` file to match your system's capabil
 
 If a ChimeraX process cannot start, check the following:
 
-1. Ensure the `CHIMERAX_PATH` environment variable is set correctly
-2. Ensure ChimeraX is installed and can be executed from the command line
-3. Check the server logs for any error messages
+1. Ensure ChimeraX is installed and can be executed from the command line
+2. If `CHIMERAX_PATH` is not set, verify that the auto-detection is finding the correct path
+3. Check for detailed error messages in the server logs and ChimeraX process logs
+4. Verify that required libraries (OpenGL/OSMesa) are properly installed
+
+### Rendering Issues
+
+If ChimeraX rendering is not working properly:
+
+1. Verify OSMesa libraries are installed and available if using offscreen rendering
+2. Check if Xvfb is properly configured when using it as a fallback
+3. Inspect the log files for specific rendering errors
+4. Run the diagnostic test in `docker-entrypoint.sh` to check rendering capabilities
 
 ### Process Becomes Unresponsive
 

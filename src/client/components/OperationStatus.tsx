@@ -5,7 +5,8 @@ import {
 } from '../websocket/WebSocketClient';
 import { 
   WebSocketMessageType, 
-  OperationStatusMessage 
+  OperationStatusMessage,
+  WebSocketMessage
 } from '../../server/types/websocket';
 
 // Create a WebSocket client factory with default configuration
@@ -185,18 +186,28 @@ const OperationStatus: React.FC<OperationStatusProps> = ({
       }
     }, [onOperationFailed]);
     
-    // Register all handlers
-    client.on(WebSocketMessageType.OPERATION_STARTED, handleOperationStarted);
-    client.on(WebSocketMessageType.OPERATION_PROGRESS, handleOperationProgress);
-    client.on(WebSocketMessageType.OPERATION_COMPLETED, handleOperationCompleted);
-    client.on(WebSocketMessageType.OPERATION_FAILED, handleOperationFailed);
+    // Register all handlers with type assertions for proper compatibility
+    // The issue is that the message handler expects specific OperationStatusMessage type
+    // but the WebSocketClient's on() method expects a more general WebSocketMessage handler
+    client.on(WebSocketMessageType.OPERATION_STARTED, 
+      handleOperationStarted as unknown as (message: WebSocketMessage) => void);
+    client.on(WebSocketMessageType.OPERATION_PROGRESS, 
+      handleOperationProgress as unknown as (message: WebSocketMessage) => void);
+    client.on(WebSocketMessageType.OPERATION_COMPLETED, 
+      handleOperationCompleted as unknown as (message: WebSocketMessage) => void);
+    client.on(WebSocketMessageType.OPERATION_FAILED, 
+      handleOperationFailed as unknown as (message: WebSocketMessage) => void);
     
     // Cleanup handlers on unmount
     return () => {
-      client.off(WebSocketMessageType.OPERATION_STARTED, handleOperationStarted);
-      client.off(WebSocketMessageType.OPERATION_PROGRESS, handleOperationProgress);
-      client.off(WebSocketMessageType.OPERATION_COMPLETED, handleOperationCompleted);
-      client.off(WebSocketMessageType.OPERATION_FAILED, handleOperationFailed);
+      client.off(WebSocketMessageType.OPERATION_STARTED, 
+        handleOperationStarted as unknown as (message: WebSocketMessage) => void);
+      client.off(WebSocketMessageType.OPERATION_PROGRESS, 
+        handleOperationProgress as unknown as (message: WebSocketMessage) => void);
+      client.off(WebSocketMessageType.OPERATION_COMPLETED, 
+        handleOperationCompleted as unknown as (message: WebSocketMessage) => void);
+      client.off(WebSocketMessageType.OPERATION_FAILED, 
+        handleOperationFailed as unknown as (message: WebSocketMessage) => void);
     };
   }, [client, onOperationComplete, onOperationFailed]);
   

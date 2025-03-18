@@ -427,15 +427,61 @@ Gets the transaction history for a session.
   }
   ```
 
-## Error Responses
+## Structure Validation
 
-All endpoints may return the following error responses:
+Structure files are validated using format-specific validators that ensure data integrity and compatibility with ChimeraX:
 
-- **400 Bad Request**: Invalid request data
-- **401 Unauthorized**: Authentication required
-- **403 Forbidden**: No access to the session
-- **404 Not Found**: Session, structure, or selection not found
-- **500 Internal Server Error**: Server error
+### PDB Structure Validation
+
+PDB files are validated for:
+- Presence of HEADER record
+- ATOM/HETATM records existence
+- END record verification
+- Proper atom and residue formatting
+- Chain identification
+
+### CIF/mmCIF Structure Validation
+
+CIF files are validated for:
+- data_ section presence
+- _atom_site entries
+- Proper formatting of coordinate data
+
+### Validation Response
+
+When validation fails, a detailed error response is provided:
+
+```json
+{
+  "status": "error",
+  "code": "VALIDATION_ERROR",
+  "message": "Invalid PDB file",
+  "details": {
+    "errors": [
+      "No ATOM or HETATM records found in PDB file"
+    ],
+    "warnings": [
+      "Missing HEADER record in PDB file"
+    ],
+    "format": "pdb",
+    "providedFormat": "pdb"
+  }
+}
+```
+
+## Enhanced Error Responses
+
+The API implements a comprehensive error handling system with standardized responses:
+
+- **400 Bad Request**: Invalid request data (`ValidationError`)
+- **401 Unauthorized**: Authentication required (`AuthenticationError`)
+- **403 Forbidden**: No access to the session (`AuthorizationError`)
+- **404 Not Found**: Session, structure, or selection not found (`NotFoundError`)
+- **409 Conflict**: Resource already exists (`ConflictError`)
+- **429 Too Many Requests**: Rate limit exceeded (`RateLimitError`)
+- **500 Internal Server Error**: Server error (`AppError`)
+- **500 Storage Error**: File storage issues (`StorageError`)
+- **500 ChimeraX Error**: ChimeraX operation failures (`ChimeraXError`)
 
 Example error response:
 
@@ -452,6 +498,12 @@ Example error response:
   ]
 }
 ```
+
+Error responses include:
+- Consistent status code and message format
+- Error type identification for client handling
+- Detailed context for debugging
+- User-friendly error messages
 
 ## Selection Specifiers
 

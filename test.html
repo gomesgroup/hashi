@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hashi Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f8;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .status.loading {
+            background-color: #cce5ff;
+            border: 1px solid #b8daff;
+            color: #004085;
+        }
+        .status.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .btn {
+            padding: 8px 16px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-primary {
+            background-color: #007bff;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-info {
+            background-color: #17a2b8;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hashi ChimeraX Test</h1>
+        <p>This is a simple test page to verify the standalone server connection</p>
+        
+        <div id="statusBox" class="status loading">
+            Checking connection...
+        </div>
+        
+        <button id="refreshBtn" class="btn btn-primary">Refresh Status</button>
+        
+        <div id="chimeraxControls" style="display: none;">
+            <h2>ChimeraX Status</h2>
+            <div id="statusInfo">Loading ChimeraX status...</div>
+            
+            <h2>ChimeraX Controls</h2>
+            <button id="startBtn" class="btn btn-success">Start ChimeraX</button>
+            <button id="stopBtn" class="btn btn-danger">Stop ChimeraX</button>
+            <button id="commandBtn" class="btn btn-info">Open PDB 1abc (Test Command)</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const statusBox = document.getElementById('statusBox');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const chimeraxControls = document.getElementById('chimeraxControls');
+        const statusInfo = document.getElementById('statusInfo');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const commandBtn = document.getElementById('commandBtn');
+        
+        // Server URL
+        const SERVER_URL = 'http://localhost:9876/api';
+        
+        // ChimeraX status
+        let chimeraxStatus = null;
+        
+        // Check connection on page load
+        document.addEventListener('DOMContentLoaded', checkConnection);
+        
+        // Add event listeners
+        refreshBtn.addEventListener('click', checkConnection);
+        startBtn.addEventListener('click', startChimeraX);
+        stopBtn.addEventListener('click', stopChimeraX);
+        commandBtn.addEventListener('click', executeCommand);
+        
+        // Functions
+        async function checkConnection() {
+            try {
+                statusBox.className = 'status loading';
+                statusBox.textContent = 'Checking connection to standalone server...';
+                
+                const response = await fetch(`${SERVER_URL}/health`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusBox.className = 'status success';
+                    statusBox.textContent = `Connected to server: ${data.message}`;
+                    chimeraxControls.style.display = 'block';
+                    getChimeraxStatus();
+                } else {
+                    statusBox.className = 'status error';
+                    statusBox.textContent = 'Server returned unexpected response';
+                    chimeraxControls.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Connection error:', error);
+                statusBox.className = 'status error';
+                statusBox.textContent = 'Failed to connect to server at http://localhost:9876';
+                chimeraxControls.style.display = 'none';
+            }
+        }
+        
+        async function getChimeraxStatus() {
+            try {
+                const response = await fetch(`${SERVER_URL}/chimerax/status`);
+                chimeraxStatus = await response.json();
+                
+                updateChimeraxUI();
+            } catch (error) {
+                console.error('Failed to get ChimeraX status:', error);
+                statusInfo.textContent = 'Error fetching ChimeraX status';
+            }
+        }
+        
+        function updateChimeraxUI() {
+            if (!chimeraxStatus) return;
+            
+            // Update status info
+            let statusHtml = `
+                <p><strong>Running:</strong> ${chimeraxStatus.running ? 'Yes' : 'No'}</p>
+                ${chimeraxStatus.running ? `<p><strong>PID:</strong> ${chimeraxStatus.pid}</p>` : ''}
+                <p><strong>Path:</strong> ${chimeraxStatus.chimeraxPath}</p>
+            `;
+            statusInfo.innerHTML = statusHtml;
+            
+            // Update buttons
+            startBtn.disabled = chimeraxStatus.running;
+            stopBtn.disabled = !chimeraxStatus.running;
+            commandBtn.disabled = !chimeraxStatus.running;
+        }
+        
+        async function startChimeraX() {
+            try {
+                startBtn.disabled = true;
+                
+                const response = await fetch(`${SERVER_URL}/chimerax/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('ChimeraX start response:', data);
+                
+                getChimeraxStatus();
+            } catch (error) {
+                console.error('Failed to start ChimeraX:', error);
+                alert('Failed to start ChimeraX');
+                startBtn.disabled = false;
+            }
+        }
+        
+        async function stopChimeraX() {
+            try {
+                stopBtn.disabled = true;
+                
+                const response = await fetch(`${SERVER_URL}/chimerax/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('ChimeraX stop response:', data);
+                
+                getChimeraxStatus();
+            } catch (error) {
+                console.error('Failed to stop ChimeraX:', error);
+                alert('Failed to stop ChimeraX');
+                stopBtn.disabled = false;
+            }
+        }
+        
+        async function executeCommand() {
+            try {
+                const command = 'open 1abc';
+                commandBtn.disabled = true;
+                
+                const response = await fetch(`${SERVER_URL}/chimerax/command`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ command })
+                });
+                
+                const data = await response.json();
+                console.log('ChimeraX command response:', data);
+                alert(`Command sent to ChimeraX: ${command}`);
+                
+                commandBtn.disabled = !chimeraxStatus.running;
+            } catch (error) {
+                console.error('Failed to execute ChimeraX command:', error);
+                alert('Failed to execute command');
+                commandBtn.disabled = !chimeraxStatus.running;
+            }
+        }
+    </script>
+</body>
+</html>

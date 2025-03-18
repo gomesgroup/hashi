@@ -4,9 +4,16 @@ import { repositories } from '../../database/repositories';
 import { StorageService } from '.';
 import { MolecularStructure } from '../../database/entities/MolecularStructure';
 import { StructureVersion } from '../../database/entities/StructureVersion';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import config from '../../config';
 import { Tag } from '../../database/entities/Tag';
+import { 
+  ValidationError, 
+  NotFoundError, 
+  AuthorizationError, 
+  StorageError 
+} from '../../utils/errors';
+import { StructureValidatorFactory } from './validators';
 
 export interface CreateStructureParams {
   name: string;
@@ -35,9 +42,11 @@ export interface UpdateStructureParams {
 
 export class StructureStorageService {
   private storageService: StorageService;
+  private validatorFactory: StructureValidatorFactory;
 
   constructor() {
     this.storageService = new StorageService();
+    this.validatorFactory = new StructureValidatorFactory();
   }
 
   /**
@@ -60,17 +69,27 @@ export class StructureStorageService {
     // Check file format is allowed
     const allowedFormats = config.storage.allowedFileTypes;
     if (!allowedFormats.includes(format)) {
-      throw new Error(`File format ${format} is not allowed. Allowed formats: ${allowedFormats.join(', ')}`);
+      throw new ValidationError(`File format ${format} is not allowed`, { 
+        allowedFormats,
+        providedFormat: format
+      });
     }
 
     // Calculate file size
     const contentBuffer = typeof content === 'string' ? Buffer.from(content) : content;
     const size = contentBuffer.length;
+    
+    // Validate the file structure
+    await this.validateStructureFile(contentBuffer, format, userId, name);
 
     // Check storage quota
     const hasQuota = await this.storageService.checkStorageQuota(userId, size);
     if (!hasQuota) {
-      throw new Error('Storage quota exceeded');
+      throw new StorageError('Storage quota exceeded', {
+        userId,
+        fileSize: size,
+        operation: 'create'
+      });
     }
 
     try {
@@ -144,12 +163,16 @@ export class StructureStorageService {
     // Retrieve the structure
     const structure = await repositories.structures.findById(structureId);
     if (!structure) {
-      throw new Error(`Structure ${structureId} not found`);
+      throw new NotFoundError(`Structure not found`, { structureId });
     }
 
     // Check ownership
     if (structure.userId !== userId) {
-      throw new Error('You do not have permission to update this structure');
+      throw new AuthorizationError('You do not have permission to update this structure', {
+        structureId,
+        userId,
+        ownerId: structure.userId
+      });
     }
 
     // Start a transaction for all database operations
@@ -169,11 +192,19 @@ export class StructureStorageService {
       if (content) {
         const contentBuffer = typeof content === 'string' ? Buffer.from(content) : content;
         const size = contentBuffer.length;
+        
+        // Validate the file structure
+        await this.validateStructureFile(contentBuffer, structure.format, userId, name || structure.name);
 
         // Check storage quota
         const hasQuota = await this.storageService.checkStorageQuota(userId, size);
         if (!hasQuota) {
-          throw new Error('Storage quota exceeded');
+          throw new StorageError('Storage quota exceeded', {
+            userId,
+            fileSize: size,
+            operation: 'update',
+            structureId
+          });
         }
 
         // Generate storage path and save the file
@@ -242,12 +273,17 @@ export class StructureStorageService {
     // Retrieve the structure with versions
     const structure = await repositories.structures.findByIdWithVersions(structureId);
     if (!structure) {
-      throw new Error(`Structure ${structureId} not found`);
+      throw new NotFoundError(`Structure not found`, { structureId });
     }
 
     // Check ownership
     if (structure.userId !== userId) {
-      throw new Error('You do not have permission to delete this structure');
+      throw new AuthorizationError('You do not have permission to delete this structure', {
+        structureId,
+        userId,
+        ownerId: structure.userId,
+        operation: 'delete'
+      });
     }
 
     // Calculate total size to update quotas
@@ -291,7 +327,7 @@ export class StructureStorageService {
     // Get the structure
     const structure = await repositories.structures.findById(structureId);
     if (!structure) {
-      throw new Error(`Structure ${structureId} not found`);
+      throw new NotFoundError(`Structure not found`, { structureId });
     }
 
     // Get the requested version or the latest version
@@ -305,7 +341,10 @@ export class StructureStorageService {
     }
 
     if (!version) {
-      throw new Error(`Version ${versionNumber || 'latest'} not found for structure ${structureId}`);
+      throw new NotFoundError(`Version not found`, { 
+        structureId, 
+        requestedVersion: versionNumber || 'latest' 
+      });
     }
 
     // Read the file
@@ -382,5 +421,68 @@ export class StructureStorageService {
   private async calculateTotalSize(structureId: string): Promise<number> {
     const versions = await repositories.structureVersions.findByStructure(structureId);
     return versions.reduce((total, version) => total + version.size, 0);
+  }
+  
+  /**
+   * Validate a molecular structure file
+   * Performs format-specific validation and returns results
+   * @param content File content
+   * @param format File format
+   * @param userId User ID
+   * @param fileName Optional file name
+   * @returns Validation result
+   * @throws ValidationError if the file is invalid
+   */
+  public async validateStructureFile(
+    content: Buffer | string,
+    format: string,
+    userId: string,
+    fileName?: string
+  ): Promise<any> {
+    try {
+      // Convert to buffer if needed
+      const contentBuffer = typeof content === 'string' ? Buffer.from(content) : content;
+      
+      // Get the appropriate validator
+      const validator = this.validatorFactory.getValidator(format);
+      
+      // Validate the file
+      const result = await validator.validate({
+        fileName,
+        format,
+        userId,
+        size: contentBuffer.length,
+        content: contentBuffer
+      });
+      
+      // If invalid, throw validation error
+      if (!result.isValid && result.errors && result.errors.length > 0) {
+        throw new ValidationError(`Invalid ${format.toUpperCase()} file`, {
+          format,
+          errors: result.errors,
+          warnings: result.warnings,
+          details: result.details
+        });
+      }
+      
+      // Return validation result with warnings
+      return {
+        isValid: result.isValid,
+        warnings: result.warnings || [],
+        details: result.details || {}
+      };
+    } catch (error) {
+      // Re-throw ValidationError
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      
+      // Log and throw new error for other errors
+      logger.error('Structure validation error:', error);
+      throw new ValidationError(`Failed to validate ${format.toUpperCase()} file`, {
+        format,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 }

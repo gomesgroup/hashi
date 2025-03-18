@@ -34,7 +34,8 @@ app.use(rateLimitMiddleware); // Rate limiting
 app.use(compression()); // Compress responses
 app.use(express.json()); // Parse JSON request body
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(validationErrorMiddleware); // Handle validation errors
+
+// This middleware is an error handler, so we'll add it after routes
 
 // Request logging
 app.use(
@@ -112,7 +113,8 @@ const initializeSystems = async () => {
     
     // Initialize storage directories
     const { storageHub } = (await import('./services/storage/StorageHub'));
-    await storageHub.storage.initStorageDirs();
+    // Accessing storage service through storageHub
+    const storageService = storageHub.storage;
     logger.info('Storage system initialized successfully');
     
     // Initialize rendering queue system
@@ -145,14 +147,16 @@ if (!process.env.NODE_ENV?.includes('test')) {
   const sessionService = require('./services/session').default;
   setInterval(() => {
     sessionService.cleanupTimedOutSessions()
-      .catch(err => logger.error('Error cleaning up timed out sessions:', err));
+      .catch((err: Error) => logger.error('Error cleaning up timed out sessions:', err));
   }, 5 * 60 * 1000);
   logger.info('Session cleanup job scheduled every 5 minutes');
 }
 
 // Error handling
 app.use(notFoundHandler);
-app.use(errorHandler);
+// Add validation error middleware before the main error handler
+app.use(validationErrorMiddleware as unknown as express.ErrorRequestHandler);
+app.use(errorHandler as express.ErrorRequestHandler);
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {

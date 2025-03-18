@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug ChimeraX Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: sans-serif; }
+        #iframe-container { width: 100%; height: 600px; margin-top: 20px; }
+        iframe { width: 100%; height: 100%; border: 1px solid #ccc; }
+        #logs { 
+            padding: 10px; 
+            background-color: #f0f0f0; 
+            border: 1px solid #ccc; 
+            height: 200px; 
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: monospace;
+        }
+        .error { color: red; }
+        .warning { color: orange; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>ChimeraX Debug Page</h1>
+    <button id="testFetch">Test Server Fetch</button>
+    <button id="refreshFrame">Refresh Frame</button>
+    <button id="testSimpleHtml">Test Simple Static HTML</button>
+    <div id="iframe-container">
+        <iframe id="chimeraxIframe" src="http://localhost:9876" frameborder="0"></iframe>
+    </div>
+    <h3>Console Logs:</h3>
+    <div id="logs"></div>
+
+    <script>
+        const logs = document.getElementById('logs');
+        const iframe = document.getElementById('chimeraxIframe');
+        const testFetchBtn = document.getElementById('testFetch');
+        const refreshFrameBtn = document.getElementById('refreshFrame');
+        const testSimpleHtmlBtn = document.getElementById('testSimpleHtml');
+
+        // Override console methods to capture logs
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        function logToDiv(message, type = 'log') {
+            const el = document.createElement('div');
+            el.textContent = `[${new Date().toISOString().substr(11, 8)}] ${message}`;
+            el.className = type;
+            logs.appendChild(el);
+            logs.scrollTop = logs.scrollHeight;
+            
+            // Also log to original console
+            originalConsole[type](message);
+        }
+
+        console.log = function() {
+            const message = Array.from(arguments).join(' ');
+            logToDiv(message, 'log');
+        };
+        
+        console.error = function() {
+            const message = Array.from(arguments).join(' ');
+            logToDiv(message, 'error');
+        };
+        
+        console.warn = function() {
+            const message = Array.from(arguments).join(' ');
+            logToDiv(message, 'warning');
+        };
+        
+        console.info = function() {
+            const message = Array.from(arguments).join(' ');
+            logToDiv(message, 'info');
+        };
+
+        // Test server fetch
+        testFetchBtn.addEventListener('click', async () => {
+            try {
+                console.log('Testing fetch to ChimeraX server...');
+                const response = await fetch('http://localhost:9876/api/health');
+                const data = await response.json();
+                console.log('Server response:', JSON.stringify(data));
+            } catch (error) {
+                console.error('Fetch error:', error.message);
+            }
+        });
+
+        // Refresh iframe
+        refreshFrameBtn.addEventListener('click', () => {
+            console.log('Refreshing iframe...');
+            iframe.src = `http://localhost:9876?t=${Date.now()}`;
+        });
+
+        // Test with simple HTML
+        testSimpleHtmlBtn.addEventListener('click', () => {
+            console.log('Loading simple static HTML...');
+            const blob = new Blob([`
+                <html>
+                <head><title>Test Page</title></head>
+                <body style="background-color: #f0f0f0; padding: 20px;">
+                <h1>Test Static Content</h1>
+                <p>This is a simple static HTML page loaded in the iframe.</p>
+                </body>
+                </html>
+            `], {type: 'text/html'});
+            iframe.src = URL.createObjectURL(blob);
+        });
+
+        // Monitor iframe load events
+        iframe.addEventListener('load', () => {
+            console.log('Iframe loaded');
+        });
+
+        iframe.addEventListener('error', (error) => {
+            console.error('Iframe error:', error);
+        });
+
+        window.addEventListener('message', (event) => {
+            console.log('Received message from iframe:', event.data);
+        });
+
+        // Log initial load
+        console.log('Debug page loaded, testing iframe to ChimeraX server');
+    </script>
+</body>
+</html>

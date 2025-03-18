@@ -31,3 +31,6 @@ if (process.env.NODE_ENV === 'test') {
 }
 
 export default logger;
+
+// Also provide logger as a named export for compatibility
+export { logger };

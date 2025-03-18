@@ -1,5 +1,6 @@
 import express from 'express';
 import promClient from 'prom-client';
+import os from 'os';
 import config from '../config';
 
 // Configuration

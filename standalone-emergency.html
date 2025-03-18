@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hashi - Standalone Emergency Fallback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f8;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0;
+        }
+        .error-box {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .viewer {
+            width: 100%;
+            height: 600px;
+            background-color: white;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hashi - Standalone Emergency Fallback</h1>
+        </header>
+        
+        <div class="error-box">
+            <h3>ChimeraX Integration Unavailable</h3>
+            <p>
+                The ChimeraX integration is currently experiencing OpenGL compatibility issues on this system.
+                This HTML file provides a direct RCSB Molecular Viewer fallback that requires no server.
+            </p>
+        </div>
+        
+        <div class="controls">
+            <input type="text" id="pdbInput" value="1ubq" placeholder="Enter PDB ID" />
+            <button onclick="loadStructure()">Load Structure</button>
+            <button onclick="loadPdb('1ubq')">1UBQ</button>
+            <button onclick="loadPdb('2vaa')">2VAA</button>
+            <button onclick="loadPdb('3j3q')">3J3Q</button>
+        </div>
+        
+        <div class="viewer">
+            <iframe id="viewer" src="https://www.rcsb.org/3d-view/1ubq?preset=default" title="RCSB Molecular Viewer"></iframe>
+        </div>
+    </div>
+    
+    <script>
+        function loadStructure() {
+            const pdbId = document.getElementById('pdbInput').value.trim();
+            if (pdbId) {
+                document.getElementById('viewer').src = `https://www.rcsb.org/3d-view/${pdbId}?preset=default`;
+            }
+        }
+        
+        function loadPdb(pdbId) {
+            document.getElementById('pdbInput').value = pdbId;
+            document.getElementById('viewer').src = `https://www.rcsb.org/3d-view/${pdbId}?preset=default`;
+        }
+    </script>
+</body>
+</html>

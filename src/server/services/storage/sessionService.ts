@@ -2,7 +2,7 @@ import { repositories } from '../../database/repositories';
 import { StorageService } from '.';
 import { ChimeraXSession } from '../../database/entities/ChimeraXSession';
 import { SessionVersion } from '../../database/entities/SessionVersion';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 
 export interface CreateSessionParams {
   name: string;

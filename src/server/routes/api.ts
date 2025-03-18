@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import sessionRoutes from './sessionRoutes';
 import chimeraxRoutes from './chimeraxRoutes';
 import commandRoutes from './commandRoutes';
@@ -17,7 +17,7 @@ router.use(requestIdMiddleware);
 router.use(optionalAuthMiddleware);
 
 // Health check endpoint
-router.get('/health', (req, res) => {
+router.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
     message: 'Server is running',
@@ -26,7 +26,7 @@ router.get('/health', (req, res) => {
 });
 
 // Version endpoint
-router.get('/version', (req, res) => {
+router.get('/version', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
     version: process.env.npm_package_version || '1.0.0',

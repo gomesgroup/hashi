@@ -73,36 +73,58 @@ The permission service (`src/server/services/permissionService.ts`) implements:
 
 ## API Security Features
 
+### Comprehensive Error Handling
+
+- Centralized error handling system with standardized responses
+- Custom error classes with appropriate status codes and error types:
+  - `AppError`: Base error class with consistent format
+  - `ValidationError`: For input validation failures 
+  - `AuthenticationError`: For authentication issues
+  - `AuthorizationError`: For permission problems
+  - `NotFoundError`: For missing resources
+  - `ConflictError`: For duplicate resources
+  - `RateLimitError`: For rate limiting violations
+  - `StorageError`: For file storage issues
+  - `ChimeraXError`: For ChimeraX operation failures
+- Detailed error context for debugging
+- User-friendly error messages for client applications
+
 ### JWT Implementation
 
 - Short-lived access tokens (configurable expiration)
 - Refresh token rotation for enhanced security
 - Token validation with proper signature verification
 - Secure token storage recommendations for clients
+- JWT payload customization with user role and permissions
 
 ### Password Security
 
 - Bcrypt hashing with configurable salt rounds
-- Strong password requirements with validation
+- Strong password requirements with comprehensive validation
 - Account lockout after multiple failed attempts
-- Secure password reset workflow
+- Secure password reset workflow with token expiration
+- Password strength checking with configurable requirements
 
 ### Request Protection
 
-- Input validation using Joi schemas
-- Rate limiting on sensitive endpoints
-- Request ID tracking for debugging
-- Consistent error responses for security
+- Input validation using Joi schemas with custom validators
+- Advanced rate limiting with differentiation between successful and failed attempts
+- Request tracking with UUID-based request IDs for comprehensive logging
+- Consistent error responses with appropriate HTTP status codes
+- Content length limits to prevent large payload attacks
+- Enhanced validation for file uploads and structure formats
 
 ### Network Security
 
-- CORS protection with configurable allowed origins
-- Security headers for common web vulnerabilities:
-  - Content Security Policy
-  - XSS Protection
-  - HSTS
-  - Frame protection
-  - MIME type sniffing protection
+- Sophisticated CORS protection with environment-specific configurations
+- Enhanced security headers via Helmet:
+  - Comprehensive Content Security Policy with environment-specific settings
+  - Cross-Origin policies (Embedder, Opener, Resource)
+  - XSS Protection and Frame protection
+  - DNS prefetch control and Referrer Policy
+  - HSTS with proper configuration
+  - Prevention of MIME type sniffing
+  - Origin Agent Cluster for better isolation
 
 ## Integration with Existing Systems
 

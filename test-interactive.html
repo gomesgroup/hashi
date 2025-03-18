@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fallback Molecular Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info-banner {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .control-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+        .viewer-container {
+            width: 100%;
+            height: 600px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RCSB Fallback Molecular Viewer</h1>
+        
+        <div class="info-banner">
+            <strong>Note:</strong> The local ChimeraX integration is currently unavailable due to OpenGL compatibility issues. 
+            Using the RCSB Molecular Viewer as a fallback solution.
+        </div>
+        
+        <div class="control-panel">
+            <input type="text" id="pdbIdInput" placeholder="PDB ID" value="1ubq">
+            <button id="loadButton">Load Structure</button>
+            <button id="ubqButton">Load 1UBQ</button>
+            <button id="vaaButton">Load 2VAA</button>
+            <button id="j3qButton">Load 3J3Q</button>
+        </div>
+        
+        <div class="viewer-container">
+            <iframe id="rcsbViewer" src="https://www.rcsb.org/3d-view/1ubq?preset=default"></iframe>
+        </div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const pdbIdInput = document.getElementById('pdbIdInput');
+        const loadButton = document.getElementById('loadButton');
+        const ubqButton = document.getElementById('ubqButton');
+        const vaaButton = document.getElementById('vaaButton');
+        const j3qButton = document.getElementById('j3qButton');
+        const rcsbViewer = document.getElementById('rcsbViewer');
+        
+        // Load a PDB structure
+        function loadStructure(pdbId) {
+            pdbId = pdbId.toLowerCase();
+            rcsbViewer.src = `https://www.rcsb.org/3d-view/${pdbId}?preset=default`;
+            pdbIdInput.value = pdbId;
+        }
+        
+        // Event listeners
+        loadButton.addEventListener('click', () => {
+            const pdbId = pdbIdInput.value.trim();
+            if (pdbId.length > 0) {
+                loadStructure(pdbId);
+            }
+        });
+        
+        ubqButton.addEventListener('click', () => loadStructure('1ubq'));
+        vaaButton.addEventListener('click', () => loadStructure('2vaa'));
+        j3qButton.addEventListener('click', () => loadStructure('3j3q'));
+        
+        // Check if the PDB ID has been provided in the URL
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pdbId = urlParams.get('pdb');
+            if (pdbId) {
+                loadStructure(pdbId);
+            }
+        });
+    </script>
+</body>
+</html>

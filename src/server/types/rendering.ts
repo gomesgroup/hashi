@@ -129,14 +129,22 @@ export interface SnapshotMetadata {
 }
 
 /**
+ * Movie format type
+ */
+export enum MovieFormat {
+  MP4 = 'mp4',
+  GIF = 'gif'
+}
+
+/**
  * Movie rendering parameters
  */
-export interface MovieParameters extends SnapshotParameters {
+export interface MovieParameters extends Omit<SnapshotParameters, 'format'> {
   frames: {
     duration: number;          // Duration in milliseconds
     camera?: CameraSettings;   // Camera settings for this frame
     style?: StyleSettings;     // Style settings for this frame
   }[];
   fps?: number;                // Frames per second
-  format?: 'mp4' | 'gif';      // Movie format
+  format?: MovieFormat;        // Movie format
 }

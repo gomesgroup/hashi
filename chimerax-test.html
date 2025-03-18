@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal ChimeraX Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .viewer {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+            background-color: #000;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .controls {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #statusMessage {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Minimal ChimeraX Test</h1>
+        
+        <div class="controls">
+            <button id="checkServerBtn">Check Server</button>
+            <button id="startChimeraXBtn">Start ChimeraX</button>
+            <button id="loadPdb1ubqBtn">Load 1UBQ</button>
+            <button id="loadPdb2vaaBtn">Load 2VAA</button>
+            <button id="takeSnapshotBtn">Take Snapshot</button>
+            
+            <div id="statusMessage"></div>
+        </div>
+        
+        <div class="viewer">
+            <iframe id="chimeraxIframe" src="http://localhost:9876" width="100%" height="100%" frameborder="0"></iframe>
+        </div>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const checkServerBtn = document.getElementById('checkServerBtn');
+        const startChimeraXBtn = document.getElementById('startChimeraXBtn');
+        const loadPdb1ubqBtn = document.getElementById('loadPdb1ubqBtn');
+        const loadPdb2vaaBtn = document.getElementById('loadPdb2vaaBtn');
+        const takeSnapshotBtn = document.getElementById('takeSnapshotBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const chimeraxIframe = document.getElementById('chimeraxIframe');
+        
+        // Constants
+        const SERVER_URL = 'http://localhost:9876/api';
+        
+        // Event listeners
+        checkServerBtn.addEventListener('click', checkServer);
+        startChimeraXBtn.addEventListener('click', startChimeraX);
+        loadPdb1ubqBtn.addEventListener('click', () => loadStructure('1ubq'));
+        loadPdb2vaaBtn.addEventListener('click', () => loadStructure('2vaa'));
+        takeSnapshotBtn.addEventListener('click', takeSnapshot);
+        
+        // Check server status
+        async function checkServer() {
+            showStatus('Checking server connection...', 'info');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/health`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showStatus('Server is running successfully!', 'success');
+                } else {
+                    showStatus('Server returned an unexpected response', 'error');
+                }
+            } catch (error) {
+                console.error('Server error:', error);
+                showStatus(`Cannot connect to server: ${error.message}`, 'error');
+            }
+        }
+        
+        // Start ChimeraX
+        async function startChimeraX() {
+            showStatus('Starting ChimeraX...', 'info');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/chimerax/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showStatus(`ChimeraX started successfully! (PID: ${data.pid})`, 'success');
+                } else {
+                    showStatus(`Failed to start ChimeraX: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error starting ChimeraX:', error);
+                showStatus(`Error starting ChimeraX: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load structure
+        async function loadStructure(pdbId) {
+            showStatus(`Loading structure ${pdbId}...`, 'info');
+            
+            try {
+                // Clear current session
+                await executeCommand('close session');
+                
+                // Load the structure
+                await executeCommand(`open ${pdbId}`);
+                
+                showStatus(`Structure ${pdbId} loaded successfully!`, 'success');
+            } catch (error) {
+                console.error('Error loading structure:', error);
+                showStatus(`Error loading structure: ${error.message}`, 'error');
+            }
+        }
+        
+        // Take snapshot
+        async function takeSnapshot() {
+            showStatus('Taking snapshot...', 'info');
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/chimerax/snapshot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        width: 800,
+                        height: 600
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showStatus('Snapshot created successfully!', 'success');
+                    
+                    // Reload the iframe to show the snapshot
+                    chimeraxIframe.src = chimeraxIframe.src;
+                } else {
+                    showStatus(`Failed to create snapshot: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error taking snapshot:', error);
+                showStatus(`Error taking snapshot: ${error.message}`, 'error');
+            }
+        }
+        
+        // Execute ChimeraX command
+        async function executeCommand(command) {
+            try {
+                const response = await fetch(`${SERVER_URL}/chimerax/command`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                
+                return await response.json();
+            } catch (error) {
+                console.error('Error executing command:', error);
+                throw error;
+            }
+        }
+        
+        // Show status message
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = type;
+            statusMessage.style.display = 'block';
+            
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        // Check server on load
+        window.addEventListener('DOMContentLoaded', checkServer);
+    </script>
+</body>
+</html>

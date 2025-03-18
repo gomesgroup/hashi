@@ -60,8 +60,13 @@ Creates a new user account.
     ```json
     {
       "status": "error",
-      "code": "EMAIL_ALREADY_EXISTS",
-      "message": "Email address is already registered"
+      "code": "CONFLICT",
+      "message": "Email address is already registered",
+      "details": {
+        "requestId": "df3a77b8-1d96-4a8e-8cbb-22871af79522",
+        "field": "email",
+        "value": "user@example.com"
+      }
     }
     ```
   - **Code**: 400 Bad Request
@@ -70,12 +75,15 @@ Creates a new user account.
       "status": "error",
       "code": "VALIDATION_ERROR",
       "message": "Invalid request data",
-      "details": [
-        {
-          "field": "password",
-          "message": "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
-        }
-      ]
+      "details": {
+        "requestId": "8f7a61c4-5b27-4d3e-9c98-12a45bc78e34",
+        "errors": [
+          {
+            "field": "password",
+            "message": "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
+          }
+        ]
+      }
     }
     ```
 
@@ -114,16 +122,39 @@ Authenticates a user and returns JWT tokens.
     ```json
     {
       "status": "error",
-      "code": "INVALID_CREDENTIALS",
-      "message": "Invalid email or password"
+      "code": "AUTHENTICATION_ERROR",
+      "message": "Invalid email or password",
+      "details": {
+        "requestId": "a2c4e6g8-1b3d-5f7h-9j1l-k3m5n7p9r1t3",
+        "attemptCount": 2,
+        "maxAttempts": 5
+      }
     }
     ```
   - **Code**: 403 Forbidden
     ```json
     {
       "status": "error",
-      "code": "ACCOUNT_LOCKED",
-      "message": "Account is locked. Please reset your password."
+      "code": "AUTHENTICATION_ERROR",
+      "message": "Account is locked. Please reset your password.",
+      "details": {
+        "requestId": "b3d5f7h9-2c4e-6g8i-k1m3-n5p7r9t1v3x5",
+        "reason": "too_many_failed_attempts",
+        "lockedUntil": "2023-07-01T13:00:00Z"
+      }
+    }
+    ```
+  - **Code**: 429 Too Many Requests
+    ```json
+    {
+      "status": "error",
+      "code": "RATE_LIMIT",
+      "message": "Too many authentication attempts, please try again later",
+      "details": {
+        "requestId": "c4e6g8i1-3d5f-7h9j-l1n3-p5r7t9v1x3z5",
+        "retryAfter": 900,
+        "authAttempts": true
+      }
     }
     ```
 
@@ -581,3 +612,46 @@ The authentication system implements several security best practices:
 - Email verification for new accounts
 - Secure password reset process
 - Activity logging for security events
+
+## Enhanced Error Handling
+
+The authentication system implements a sophisticated error handling mechanism with standardized error responses:
+
+### Error Types
+
+- **ValidationError** (400): Input validation failures for request parameters
+- **AuthenticationError** (401): Authentication failures and invalid tokens
+- **AuthorizationError** (403): Permission and access control failures
+- **NotFoundError** (404): Resource not found errors
+- **ConflictError** (409): Resource conflicts (e.g., duplicate email)
+- **RateLimitError** (429): Rate limit exceeded for API endpoints
+- **AppError** (500): Generic application errors with contextual information
+
+### Error Response Format
+
+All error responses follow this standardized format:
+
+```json
+{
+  "status": "error",
+  "code": "ERROR_TYPE",
+  "message": "Human-readable error description",
+  "details": {
+    "requestId": "unique-uuid-for-request-tracking",
+    "field": "specific-field-with-error",
+    "errors": [
+      {"field": "field1", "message": "Error message for field1"},
+      {"field": "field2", "message": "Error message for field2"}
+    ],
+    "additionalInfo": "Context-specific information"
+  }
+}
+```
+
+### Benefits
+
+1. **Consistency**: All errors follow the same structure across the API
+2. **Traceability**: Request IDs enable tracking errors through logs
+3. **Client-Friendly**: Clear messages and error codes support better client handling
+4. **Security-Aware**: Error responses avoid leaking sensitive information
+5. **Contextual**: Detailed information aids debugging while maintaining security

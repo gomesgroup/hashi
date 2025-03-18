@@ -6,6 +6,7 @@ import sessionService from '../services/session';
 import authService from '../services/authService';
 import permissionService from '../services/permissionService';
 import { UserRole, JWTPayload } from '../types/auth';
+import { AuthenticationError, AuthorizationError, ValidationError } from '../utils/errors';
 
 /**
  * Authentication middleware for checking if a request is authenticated
@@ -18,11 +19,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       logger.warn('Authentication failed: No token provided');
-      return res.status(401).json({
-        status: 'error',
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      throw new AuthenticationError('Authentication required');
     }
 
     // Extract the token
@@ -37,11 +34,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
       
       if (!user) {
         logger.warn(`Authentication failed: User not found for token`);
-        return res.status(401).json({
-          status: 'error',
-          code: 'UNAUTHORIZED',
-          message: 'Invalid authentication token'
-        });
+        throw new AuthenticationError('Invalid authentication token');
       }
 
       // Attach user info to the request
@@ -53,19 +46,16 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
       next();
     } catch (error) {
       logger.warn('Authentication failed: Invalid token', error);
-      return res.status(401).json({
-        status: 'error',
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or expired token'
-      });
+      throw new AuthenticationError('Invalid or expired token');
     }
   } catch (error) {
-    logger.error('Authentication error:', error);
-    return res.status(500).json({
-      status: 'error',
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Internal server error'
-    });
+    // Re-throw existing AppErrors (like AuthenticationError)
+    if (error instanceof Error) {
+      next(error);
+    } else {
+      logger.error('Authentication error:', error);
+      next(new Error('Internal server error during authentication'));
+    }
   }
 };
 
@@ -125,21 +115,13 @@ export const roleMiddleware = (roles: UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     // If no user or role attached, authentication middleware didn't run or failed
     if (!req.user || !req.role) {
-      return res.status(401).json({
-        status: 'error',
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      throw new AuthenticationError('Authentication required');
     }
 
     // Check if user's role is in the allowed roles
     if (!roles.includes(req.role)) {
       logger.warn(`Authorization failed: User ${req.userId} with role ${req.role} attempted to access a route requiring roles: ${roles.join(', ')}`);
-      return res.status(403).json({
-        status: 'error',
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to access this resource'
-      });
+      throw new AuthorizationError('You do not have permission to access this resource');
     }
 
     next();
@@ -161,11 +143,7 @@ export const permissionMiddleware = (
   return (req: Request, res: Response, next: NextFunction) => {
     // If no user or role attached, authentication middleware didn't run or failed
     if (!req.user || !req.role) {
-      return res.status(401).json({
-        status: 'error',
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
+      throw new AuthenticationError('Authentication required');
     }
 
     // Get conditions from request if conditionsFn is provided
@@ -176,11 +154,7 @@ export const permissionMiddleware = (
 
     if (!hasPermission) {
       logger.warn(`Permission denied: User ${req.userId} with role ${req.role} attempted ${action} on ${subject}`);
-      return res.status(403).json({
-        status: 'error',
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to perform this action'
-      });
+      throw new AuthorizationError('You do not have permission to perform this action');
     }
 
     next();
@@ -196,11 +170,7 @@ export const sessionAuthMiddleware = (req: Request, res: Response, next: NextFun
   const sessionId = req.params.id;
   
   if (!sessionId) {
-    return res.status(400).json({
-      status: 'error',
-      code: 'BAD_REQUEST',
-      message: 'Session ID is required'
-    });
+    throw new ValidationError('Session ID is required', { field: 'id' });
   }
 
   // Check if the user has access to this session
@@ -208,11 +178,7 @@ export const sessionAuthMiddleware = (req: Request, res: Response, next: NextFun
   
   if (!hasAccess) {
     logger.warn(`Authorization failed: User ${userId} attempted to access session ${sessionId}`);
-    return res.status(403).json({
-      status: 'error',
-      code: 'FORBIDDEN',
-      message: 'You do not have access to this session'
-    });
+    throw new AuthorizationError('You do not have access to this session');
   }
 
   next();

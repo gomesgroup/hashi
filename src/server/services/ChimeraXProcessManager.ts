@@ -1,5 +1,8 @@
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import config from '../config';
 import logger from '../utils/logger';
 import { ChimeraXProcess, ChimeraXCommandResult } from '../types/chimerax';
@@ -14,6 +17,7 @@ import fetch from 'node-fetch';
  * - Health monitoring
  * - Command execution
  * - Idle session cleanup
+ * - OSMesa rendering fallback options
  */
 export class ChimeraXProcessManager {
   private processes: Map<string, ChimeraXProcess>;
@@ -21,6 +25,10 @@ export class ChimeraXProcessManager {
   private readonly basePort: number;
   private readonly maxInstances: number;
   private readonly chimeraXPath: string;
+  private readonly platform: string;
+  private readonly hasOSMesa: boolean;
+  private readonly useXvfb: boolean;
+  private readonly debugMode: boolean;
 
   constructor() {
     this.processes = new Map();
@@ -28,9 +36,82 @@ export class ChimeraXProcessManager {
     this.basePort = config.chimerax.basePort;
     this.maxInstances = config.chimerax.maxInstances;
     this.chimeraXPath = config.chimerax.chimeraXPath;
+    this.platform = os.platform();
+    this.debugMode = process.env.DEBUG_CHIMERAX === 'true';
+    
+    // Check if OSMesa is available
+    this.hasOSMesa = process.env.OSMESA_AVAILABLE === 'true';
+    
+    // Use Xvfb as fallback on Linux if OSMesa is not available
+    this.useXvfb = this.platform === 'linux' && 
+                   !this.hasOSMesa && 
+                   process.env.DISPLAY !== undefined;
+    
+    logger.info(`ChimeraX Process Manager initialized:
+      - Platform: ${this.platform}
+      - ChimeraX Path: ${this.chimeraXPath}
+      - OSMesa Available: ${this.hasOSMesa}
+      - Using Xvfb Fallback: ${this.useXvfb}
+      - Debug Mode: ${this.debugMode}
+    `);
+
+    // Try to detect ChimeraX if path is not specified
+    if (!this.chimeraXPath) {
+      this.detectChimeraXPath();
+    }
 
     // Initialize process monitoring
     this.startProcessMonitoring();
+  }
+  
+  /**
+   * Attempt to detect ChimeraX installation path
+   * @private
+   */
+  private detectChimeraXPath(): void {
+    try {
+      const platform = os.platform();
+      let detectedPath = '';
+      
+      if (platform === 'darwin') {
+        // macOS standard installation path
+        const macPaths = [
+          '/Applications/ChimeraX.app/Contents/MacOS/ChimeraX',
+          '/Applications/UCSF ChimeraX.app/Contents/MacOS/ChimeraX'
+        ];
+        
+        for (const path of macPaths) {
+          if (fs.existsSync(path)) {
+            detectedPath = path;
+            break;
+          }
+        }
+      } else if (platform === 'linux') {
+        // Linux standard paths
+        const linuxPaths = [
+          '/usr/bin/chimerax',
+          '/usr/local/bin/chimerax',
+          '/opt/UCSF/ChimeraX/bin/chimerax'
+        ];
+        
+        for (const path of linuxPaths) {
+          if (fs.existsSync(path)) {
+            detectedPath = path;
+            break;
+          }
+        }
+      }
+      
+      if (detectedPath) {
+        logger.info(`Detected ChimeraX at: ${detectedPath}`);
+        // @ts-ignore - Override readonly property for initialization
+        this.chimeraXPath = detectedPath;
+      } else {
+        logger.warn('Could not automatically detect ChimeraX path');
+      }
+    } catch (error) {
+      logger.error(`Error detecting ChimeraX path: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -205,49 +286,135 @@ export class ChimeraXProcessManager {
    */
   private startChimeraXProcess(port: number): ChildProcess {
     const command = this.chimeraXPath;
-    const args = [
-      '--nogui',
-      '--offscreen',
-      '--nosilent',
-      '--noexit',
-      '--cmd',
-      `remotecontrol rest start port ${port} json true`,
-    ];
-
-    logger.debug(`Starting ChimeraX process with command: ${command} ${args.join(' ')}`);
     
-    const process = spawn(command, args, {
+    if (!command || !fs.existsSync(command)) {
+      throw new Error(`ChimeraX executable not found at path: ${command}`);
+    }
+    
+    // Build command line arguments
+    const args = [
+      '--nogui',            // Run without UI
+      '--offscreen',        // Use offscreen rendering
+      '--noexit',           // Prevent automatic exit
+    ];
+    
+    // Only use nosilent in debug mode
+    if (this.debugMode) {
+      args.push('--nosilent');
+    } else {
+      args.push('--silent');
+    }
+    
+    // Add OSMesa rendering options if available
+    if (this.hasOSMesa) {
+      args.push('--osmesa');  // Use OSMesa for rendering
+    }
+    
+    // Add remotecontrol command
+    args.push('--cmd');
+    args.push(`remotecontrol rest start port ${port} json true`);
+    
+    // Additional initialization commands if needed
+    const initialCommands = [];
+    
+    // Set rendering preferences
+    initialCommands.push('set bgColor white');
+    initialCommands.push('lighting soft');
+    
+    // If we have multiple commands, add them
+    if (initialCommands.length > 0) {
+      args.push('--cmd');
+      args.push(initialCommands.join('; '));
+    }
+    
+    logger.info(`Starting ChimeraX process with command: ${command} ${args.join(' ')}`);
+    
+    // Set up environment variables
+    const env = { ...process.env };
+    
+    // Configure environment based on platform and rendering options
+    if (this.platform === 'linux') {
+      if (this.useXvfb) {
+        // Using Xvfb as fallback
+        logger.info(`Using Xvfb display: ${process.env.DISPLAY}`);
+      } else if (!this.hasOSMesa) {
+        // No rendering options available, try to use software rendering
+        env.LIBGL_ALWAYS_SOFTWARE = '1';
+        logger.info('Using software rendering fallback');
+      }
+    }
+    
+    // Spawn the process with custom environment
+    const chimeraxProcess = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env
     });
 
+    // Create log directory if it doesn't exist
+    const logDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    // Create log file streams for persistent logging
+    const logFilePath = path.join(logDir, `chimerax_${port}_${Date.now()}.log`);
+    const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+    
+    // Log the startup info
+    logStream.write(`ChimeraX Process Started\n`);
+    logStream.write(`PID: ${chimeraxProcess.pid}\n`);
+    logStream.write(`Port: ${port}\n`);
+    logStream.write(`Command: ${command} ${args.join(' ')}\n`);
+    logStream.write(`Time: ${new Date().toISOString()}\n`);
+    logStream.write(`OSMesa: ${this.hasOSMesa ? 'Yes' : 'No'}\n`);
+    logStream.write(`Xvfb: ${this.useXvfb ? 'Yes' : 'No'}\n\n`);
+    
     // Handle stdout/stderr
-    process.stdout.on('data', (data) => {
-      logger.debug(`ChimeraX [PID:${process.pid}] stdout: ${data.toString().trim()}`);
+    chimeraxProcess.stdout.on('data', (data) => {
+      const message = data.toString().trim();
+      if (this.debugMode || message.includes('error') || message.includes('warning')) {
+        logger.debug(`ChimeraX [PID:${chimeraxProcess.pid}] stdout: ${message}`);
+      }
+      logStream.write(`[STDOUT] ${message}\n`);
     });
 
-    process.stderr.on('data', (data) => {
-      logger.warn(`ChimeraX [PID:${process.pid}] stderr: ${data.toString().trim()}`);
+    chimeraxProcess.stderr.on('data', (data) => {
+      const message = data.toString().trim();
+      logger.warn(`ChimeraX [PID:${chimeraxProcess.pid}] stderr: ${message}`);
+      logStream.write(`[STDERR] ${message}\n`);
+      
+      // Check for known errors
+      if (message.includes('OSMesa') && message.includes('error')) {
+        logger.error('OSMesa rendering error detected. ChimeraX could not initialize offscreen rendering.');
+        // @ts-ignore - Temporarily set for this instance
+        this.hasOSMesa = false;
+      }
     });
 
     // Handle process termination
-    process.on('close', (code) => {
-      logger.info(`ChimeraX process [PID:${process.pid}] exited with code ${code}`);
+    chimeraxProcess.on('close', (code) => {
+      logger.info(`ChimeraX process [PID:${chimeraxProcess.pid}] exited with code ${code}`);
+      logStream.write(`[EXIT] Process exited with code ${code} at ${new Date().toISOString()}\n`);
+      logStream.end();
       
       // Find and remove the terminated process
       for (const [sessionId, processInfo] of this.processes.entries()) {
-        if (processInfo.pid === process.pid) {
+        if (processInfo.pid === chimeraxProcess.pid) {
           this.processes.delete(sessionId);
           this.portAssignments.delete(processInfo.port);
+          logger.info(`Removed process info for session ${sessionId}`);
           break;
         }
       }
     });
 
-    process.on('error', (error) => {
+    chimeraxProcess.on('error', (error) => {
       logger.error(`ChimeraX process error: ${error.message}`);
+      logStream.write(`[ERROR] ${error.message} at ${new Date().toISOString()}\n`);
+      logStream.end();
     });
 
-    return process;
+    return chimeraxProcess;
   }
 
   /**
@@ -257,27 +424,103 @@ export class ChimeraXProcessManager {
    * @private
    */
   private async waitForChimeraXStartup(port: number): Promise<void> {
-    const maxAttempts = 30;
+    const maxAttempts = 60; // More attempts for slower systems
     const retryIntervalMs = 500;
+    let lastError = '';
+    let progressReported = false;
+
+    logger.info(`Waiting for ChimeraX REST API on port ${port}...`);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        // Try to connect to the REST API
-        const response = await fetch(`http://localhost:${port}/version`);
+        // Report progress every 10 attempts
+        if (attempt > 0 && attempt % 10 === 0 && !progressReported) {
+          logger.info(`Still waiting for ChimeraX REST API (${attempt}/${maxAttempts} attempts)...`);
+          progressReported = true;
+        } else if (attempt % 10 !== 0) {
+          progressReported = false;
+        }
         
+        // Try to connect to the REST API
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+        
+        const response = await fetch(`http://localhost:${port}/version`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Check if response is valid
         if (response.ok) {
-          logger.debug(`ChimeraX REST API available on port ${port}`);
+          // Try to parse the response to make sure it's working
+          const data = await response.json();
+          logger.info(`ChimeraX REST API available on port ${port}, version: ${data.version || 'unknown'}`);
+          
+          // Send a test command to verify functionality
+          await this.sendTestCommand(port);
+          
           return;
+        } else {
+          lastError = `HTTP ${response.status}: ${response.statusText}`;
         }
       } catch (error) {
-        // Ignore errors during initialization
+        lastError = (error as Error).message || 'Unknown error';
+        
+        // Check for specific connection errors
+        if (lastError.includes('ECONNREFUSED')) {
+          // Port not open yet, this is expected during startup
+        } else if (lastError.includes('aborted') || lastError.includes('timeout')) {
+          // Request timeout, might be still starting up
+          logger.debug(`ChimeraX startup: connection timeout on attempt ${attempt + 1}`);
+        } else {
+          // Log unexpected errors
+          logger.debug(`ChimeraX startup error on attempt ${attempt + 1}: ${lastError}`);
+        }
       }
 
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, retryIntervalMs));
     }
 
-    throw new Error(`ChimeraX REST API did not start within ${maxAttempts * retryIntervalMs / 1000} seconds`);
+    throw new Error(
+      `ChimeraX REST API did not start within ${
+        (maxAttempts * retryIntervalMs) / 1000
+      } seconds. Last error: ${lastError}`
+    );
+  }
+  
+  /**
+   * Sends a test command to verify ChimeraX is working properly
+   * @param port The REST API port
+   * @private
+   */
+  private async sendTestCommand(port: number): Promise<boolean> {
+    try {
+      // Simple test command
+      const testCommandUrl = `http://localhost:${port}/run?command=${encodeURIComponent('version')}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      const response = await fetch(testCommandUrl, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const result = await response.json();
+        logger.debug(`ChimeraX test command successful, result: ${JSON.stringify(result)}`);
+        return true;
+      } else {
+        logger.warn(`ChimeraX test command failed with status: ${response.status}`);
+        return false;
+      }
+    } catch (error) {
+      logger.warn(`ChimeraX test command failed: ${(error as Error).message}`);
+      return false;
+    }
   }
 
   /**
@@ -287,14 +530,53 @@ export class ChimeraXProcessManager {
    */
   private getAvailablePort(): number | null {
     const maxPort = this.basePort + this.maxInstances - 1;
-
+    
+    // Check for existing port assignments
     for (let port = this.basePort; port <= maxPort; port++) {
       if (!this.portAssignments.has(port)) {
-        return port;
+        // Test if port is actually available (not used by another process)
+        if (this.isPortAvailable(port)) {
+          return port;
+        }
       }
     }
 
     return null;
+  }
+  
+  /**
+   * Checks if a port is available on localhost
+   * @param port Port number to check
+   * @returns True if port is available
+   * @private
+   */
+  private isPortAvailable(port: number): boolean {
+    try {
+      // Try to bind to the port
+      const net = require('net');
+      const server = net.createServer();
+      
+      // Use a synchronous approach with a promise
+      return new Promise<boolean>((resolve) => {
+        server.once('error', (err: any) => {
+          // Port is in use or other error
+          server.close();
+          resolve(false);
+        });
+        
+        server.once('listening', () => {
+          // Port is available
+          server.close();
+          resolve(true);
+        });
+        
+        // Try to listen on the port
+        server.listen(port, '127.0.0.1');
+      });
+    } catch (error) {
+      logger.error(`Error checking port ${port} availability: ${(error as Error).message}`);
+      return false;
+    }
   }
 
   /**

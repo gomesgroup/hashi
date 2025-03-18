@@ -1,5 +1,5 @@
 import { repositories } from '../../database/repositories';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 
 export interface SearchParams {
   query: string;

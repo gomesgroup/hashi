@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 
-const SidebarContainer = styled.aside`
+// Define a prop interface for components that need the 'open' property
+interface SidebarProps {
+  open?: boolean;
+}
+
+const SidebarContainer = styled.aside<SidebarProps>`
   grid-area: sidebar;
   background-color: var(--primary-color);
   color: white;
@@ -115,6 +120,9 @@ const Sidebar: React.FC = () => {
           <MenuHeader>Visualization</MenuHeader>
           <MenuItem>
             <StyledNavLink to="/viewer" onClick={closeSidebar}>Molecular Viewer</StyledNavLink>
+          </MenuItem>
+          <MenuItem>
+            <StyledNavLink to="/chimerax" onClick={closeSidebar}>ChimeraX Interactive</StyledNavLink>
           </MenuItem>
           <MenuItem>
             <StyledNavLink to="/settings" onClick={closeSidebar}>View Settings</StyledNavLink>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal ChimeraX Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #status { margin: 20px 0; padding: 10px; background-color: #f0f0f0; }
+        #image { max-width: 100%; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Minimal ChimeraX Test</h1>
+    
+    <div>
+        <button id="testBtn">Test Server Connection</button>
+        <button id="startBtn">Start ChimeraX</button>
+        <button id="loadBtn">Load 1UBQ Structure</button>
+        <button id="snapshotBtn">Take Snapshot</button>
+    </div>
+    
+    <div id="status">Status will appear here</div>
+    
+    <div>
+        <img id="image" src="" alt="Molecular structure will appear here">
+    </div>
+    
+    <script>
+        // Show all errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('status').innerHTML = 
+                `<div style="color: red;">ERROR: ${message}<br>at ${source}:${lineno}:${colno}</div>`;
+            return false;
+        };
+        
+        // Utility function for API calls
+        async function callApi(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: body ? { 'Content-Type': 'application/json' } : {}
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(`http://localhost:9876/api/${endpoint}`, options);
+                const data = await response.json();
+                
+                document.getElementById('status').textContent = 
+                    `API call to ${endpoint} successful: ${JSON.stringify(data)}`;
+                
+                return data;
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    `<div style="color: red;">API Error: ${error.message}</div>`;
+                throw error;
+            }
+        }
+        
+        // Set up event handlers
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            document.getElementById('status').textContent = 'Testing connection...';
+            try {
+                const data = await callApi('health');
+                document.getElementById('status').textContent = 
+                    `Server is ${data.status === 'success' ? 'running' : 'not running properly'}`;
+            } catch (error) {
+                // Error is already handled in callApi
+            }
+        });
+        
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            document.getElementById('status').textContent = 'Starting ChimeraX...';
+            try {
+                await callApi('chimerax/start', 'POST');
+            } catch (error) {
+                // Error is already handled in callApi
+            }
+        });
+        
+        document.getElementById('loadBtn').addEventListener('click', async () => {
+            document.getElementById('status').textContent = 'Loading 1UBQ structure...';
+            try {
+                await callApi('chimerax/command', 'POST', { command: 'open 1ubq' });
+            } catch (error) {
+                // Error is already handled in callApi
+            }
+        });
+        
+        document.getElementById('snapshotBtn').addEventListener('click', async () => {
+            document.getElementById('status').textContent = 'Taking snapshot...';
+            try {
+                const data = await callApi('chimerax/snapshot', 'POST', { 
+                    width: 800, 
+                    height: 600 
+                });
+                
+                if (data.status === 'success' && data.imageUrl) {
+                    document.getElementById('image').src = data.imageUrl + `?t=${Date.now()}`;
+                }
+            } catch (error) {
+                // Error is already handled in callApi
+            }
+        });
+    </script>
+</body>
+</html>

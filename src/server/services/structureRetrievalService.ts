@@ -1,4 +1,4 @@
-import { NodeCache } from 'node-cache';
+import NodeCache from 'node-cache';
 import chimeraXProcessManager from './ChimeraXProcessManager';
 import sessionService from './session';
 import logger from '../utils/logger';

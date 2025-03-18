@@ -12,14 +12,19 @@ services:
     restart: unless-stopped
     env_file: 
       - .env
-    ports:
-      - "${PORT:-3000}:3000"
-      - "${WEBSOCKET_PORT:-3001}:3001"
     volumes:
-      - ${CHIMERAX_PATH:-/opt/chimerax}:/opt/chimerax:ro
       - app-storage:/app/storage
       - app-snapshots:/app/snapshots
       - app-logs:/app/logs
+    environment:
+      - CHIMERAX_PATH=/usr/bin/chimerax
+      - DISPLAY=:99
+      - LIBGL_ALWAYS_SOFTWARE=1
+      - MESA_GL_VERSION_OVERRIDE=3.3
+      - PYTHONIOENCODING=utf-8
+    ports:
+      - "${PORT:-3000}:3000"
+      - "${WEBSOCKET_PORT:-3001}:3001"
     depends_on:
       - db
     networks:
@@ -69,6 +74,26 @@ services:
         reservations:
           memory: 256M
           cpus: '0.2'
+
+  # ===== Development Tools =====
+  dev-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: hashi-dev-tools:${TAG:-latest}
+    profiles: ["dev"]
+    container_name: hashi-dev-tools
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "9229:9229" # For Node.js debugging
+    networks:
+      - hashi-network
+    command: tail -f /dev/null # Keep container running
 
   # ===== Monitoring Services =====
   prometheus:
@@ -180,3 +205,4 @@ volumes:
   prometheus-data:
   grafana-data:
   elasticsearch-data:
+  node_modules:

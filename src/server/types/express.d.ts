@@ -1,12 +1,15 @@
-import { User, UserRole } from './auth';
+import { User } from '../database/entities/User';
+import { UserRole } from './auth';
 
 declare global {
   namespace Express {
-    interface Request {
-      userId: string;
+    export interface Request {
+      userId?: string;
       user?: User;
       role?: UserRole;
       token?: string;
     }
   }
 }
+
+export {};

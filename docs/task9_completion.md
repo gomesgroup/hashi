@@ -1,4 +1,4 @@
-# Task 9: Basic React Frontend - Implementation Details
+# Task 9: Basic React Frontend - Implementation Details (Updated)
 
 ## Overview
 
@@ -6,9 +6,9 @@ This document outlines the implementation of Task 9, which involved creating a T
 
 The frontend implementation focuses on:
 
-1. **User Experience**: Creating an intuitive interface for molecular visualization
-2. **Performance**: Optimizing WebGL rendering for complex structures
-3. **Reliability**: Robust error handling and session management
+1. **User Experience**: Creating an intuitive interface for molecular visualization and session management
+2. **Performance**: Optimizing WebGL rendering for complex structures with various representation options
+3. **Reliability**: Robust error handling, authentication, and WebSocket reconnection
 4. **Accessibility**: Responsive design that works across different devices
 
 ## Architecture
@@ -24,14 +24,23 @@ The React frontend follows a modern architecture with the following key componen
 
 ## Key Features
 
-### 1. Session Management
+### 1. Authentication and User Management
 
-- Session initialization via login page
+- User login with email/password authentication
+- Registration form with validation
+- Token-based authentication with refresh capability
+- Protected routes for secure access
+- Automatic token restoration from localStorage
+
+### 2. Session Management
+
+- Session creation, refresh, and termination
+- Session listing with status indicators
 - Automatic session persistence using localStorage
 - Session timeout handling with refresh mechanism
 - Session status monitoring
 
-### 2. File Management
+### 3. File Management
 
 - Drag-and-drop file upload interface
 - Format selection and validation
@@ -40,11 +49,17 @@ The React frontend follows a modern architecture with the following key componen
 
 ### 3. Molecular Visualization
 
-- WebGL-based 3D molecular viewer
-- Multiple visualization styles (ball-and-stick, stick, sphere)
-- Color scheme options (by element, chain, residue type)
-- Display options (hydrogens, labels, background color)
+- Multi-tiered visualization system with fallback mechanisms:
+  - ChimeraX server-side rendering (primary)
+  - WebGL-based Three.js 3D viewer (first fallback)
+  - Static images from external PDB resources (second fallback)
+  - SVG placeholder when all else fails (final fallback)
+- Multiple visualization styles (ball-and-stick, stick, sphere, cartoon)
+- Color scheme options (by element, chain, residue type, B-factor)
+- Display options (hydrogens, labels, background color, quality)
 - Camera controls (zoom, pan, rotate)
+- Seamless transitions between rendering methods
+- Clear status indicators for rendering mode
 
 ### 4. Structure Management
 
@@ -81,32 +96,45 @@ src/client/
 ### Components
 
 1. **Layout.tsx**: Main layout with header, sidebar, and content area
-2. **MolecularViewer.tsx**: WebGL-based 3D molecular viewer
-3. **FileUpload.tsx**: Drag-and-drop file upload component
-4. **LoadingIndicator.tsx**: Loading spinner for async operations
-5. **ErrorNotification.tsx**: Toast-style error notifications
-6. **Header.tsx**: App header with session info and logout button
-7. **Sidebar.tsx**: Navigation sidebar with collapsible sections
+2. **MolecularViewer.tsx**: WebGL-based Three.js molecular viewer component
+3. **StructureRenderer.tsx**: Smart renderer with multiple fallback mechanisms
+4. **EnhancedViewerControls.tsx**: Adaptive control panel for different rendering modes
+5. **StructurePlaceholder.tsx**: SVG placeholder for when other rendering methods fail
+6. **ViewerControls.tsx**: Control panel for molecular visualization settings
+7. **LoginForm.tsx**: Authentication form with validation
+8. **RegisterForm.tsx**: User registration form with validation
+9. **ProtectedRoute.tsx**: Route wrapper that enforces authentication
+10. **SessionControls.tsx**: UI for creating, refreshing, and closing sessions
+11. **SessionList.tsx**: List of available sessions with status indicators
+12. **FileUpload.tsx**: Drag-and-drop file upload component
+13. **LoadingIndicator.tsx**: Loading spinner for async operations
+14. **ErrorNotification.tsx**: Toast-style error notifications
+15. **Header.tsx**: App header with session info and logout button
+16. **Sidebar.tsx**: Navigation sidebar with collapsible sections
 
 ### Pages
 
 1. **Login.tsx**: Session initialization page
 2. **Dashboard.tsx**: Main dashboard with structure list and quick actions
-3. **MolecularViewerPage.tsx**: 3D viewer with controls for visualization options
-4. **UploadPage.tsx**: Structure upload page with format info
-5. **NotFound.tsx**: 404 error page
+3. **StructureViewer.tsx**: Enhanced structure viewer with adaptive rendering options
+4. **MolecularViewerPage.tsx**: 3D viewer with controls for visualization options
+5. **UploadPage.tsx**: Structure upload page with format info 
+6. **NotFound.tsx**: 404 error page
 
 ### State Management
 
-1. **SessionContext**: Manages session state, creation, and persistence
-2. **ErrorContext**: Handles error notification system
+1. **AuthContext**: Manages authentication state, login, registration and token handling
+2. **SessionContext**: Manages ChimeraX session state, creation, and persistence
+3. **ErrorContext**: Handles error notification system
 
 ### Services
 
-1. **api.ts**: Base API client with interceptors for session handling
-2. **sessionService.ts**: API client for session management endpoints
-3. **fileService.ts**: API client for file upload endpoints
-4. **structureService.ts**: API client for structure data endpoints
+1. **api.ts**: Enhanced API client with authentication, interceptors, and retry logic
+2. **chimeraxService.ts**: ChimeraX API client with connection monitoring and fallback handling
+3. **websocketService.ts**: WebSocket service for real-time updates with reconnection capability
+4. **sessionService.ts**: API client for session management endpoints
+5. **fileService.ts**: API client for file upload endpoints
+6. **structureService.ts**: API client for structure data endpoints
 
 ## Technical Implementation Notes
 
@@ -122,23 +150,63 @@ Sessions are managed through the SessionContext provider. The implementation inc
 
 ### API Integration
 
-The API client is built using Axios and includes:
+The API client is built using Axios with enhanced features:
 
-- Request interceptors to automatically include session IDs in URLs
-- Response interceptors for error handling
-- Automatic redirection to login page on session expiration
+- Request interceptors to automatically include auth tokens and session IDs in requests
+- Response interceptors for comprehensive error handling
+- Token refresh logic with request queuing and retry
+- Automatic redirection to login page on auth/session expiration
 - Content-type negotiation for different data formats
+- Configurable timeout and retry parameters
+
+### WebSocket Integration
+
+The WebSocket service provides real-time communication with the backend:
+
+- Automatic connection establishment and management
+- Reconnection logic with exponential backoff
+- Message queuing for offline/disconnected periods
+- Event-based subscription system for components
+- Session and authentication integration
 
 ### Molecular Visualization
 
-The molecular viewer is implemented using Three.js and React Three Fiber:
+The enhanced molecular visualization system implements a multi-tiered approach:
 
-- Atom representation using sphere geometries
-- Bond representation using cylinder geometries
-- Camera controls for rotation, zoom, and pan
-- Different representation styles (ball-and-stick, stick, sphere)
-- Atom filtering (e.g., hide hydrogens)
-- Color schemes based on element type
+#### Primary: ChimeraX Server Rendering
+- Uses ChimeraX's professional rendering capabilities via API
+- High-quality, publication-ready images
+- Full access to ChimeraX's visualization features
+- Requires functioning ChimeraX server with OSMesa libraries
+
+#### First Fallback: Three.js WebGL Rendering
+- Client-side 3D rendering using Three.js and React Three Fiber
+- Atom representation using sphere geometries with proper physical properties
+- Bond representation using cylinder geometries with support for bond orders
+- Advanced camera controls with auto-centering and smart positioning
+- Interactive 3D exploration in the browser
+- Optimized rendering for large structures
+
+#### Second Fallback: External PDB Images
+- Retrieves pre-rendered images from RCSB PDB and PDBe
+- Multiple image sources for reliability
+- High-quality static representations
+- Works for structures with known PDB IDs
+
+#### Final Fallback: SVG Placeholder
+- Simple SVG representation of a molecule
+- Works when all other rendering methods fail
+- Minimal resource requirements
+- Displays clear message to the user
+
+The system includes:
+- Automatic detection of available rendering capabilities
+- Seamless transitions between rendering methods
+- Clear status indicators about current rendering mode
+- Manual switching between modes via UI
+- Custom React hook (useChimeraX) for managing rendering state
+- Adaptive UI controls that respond to available capabilities
+- Detailed error reporting and troubleshooting suggestions
 
 ### File Upload
 
@@ -162,13 +230,15 @@ The UI is designed to be responsive across different screen sizes:
 
 ## Future Enhancements
 
-1. **Advanced Visualization**: Add support for ribbon, cartoon, and surface representations
-2. **Selection Tools**: Implement atom/residue selection tools for measurements and modifications
+1. **Advanced Visualization**: Extend support for surface representations and volumetric rendering
+2. **Selection Tools**: Enhance atom/residue selection tools for measurements and modifications
 3. **Structure Comparison**: Add tools for structure alignment and comparison
 4. **Animation**: Support for trajectory playback and animation
-5. **Collaboration**: Real-time collaboration features
-6. **Offline Support**: Progressive Web App features for offline use
+5. **Collaboration**: Real-time collaboration features with shared state
+6. **Offline Support**: Progressive Web App features for offline use with syncing
 7. **Performance Optimization**: WebWorkers for heavy calculations and WebGL optimizations
+8. **Accessibility Improvements**: Enhanced keyboard navigation and screen reader support
+9. **Mobile Optimization**: Touch-specific controls and responsive design improvements
 
 ## Conclusion
 
@@ -176,17 +246,23 @@ The React frontend implementation provides a solid foundation for the ChimeraX w
 
 ### Key Achievements
 
-- Implemented a WebGL-based molecular visualization system using Three.js and React Three Fiber
-- Created a session management system with automatic persistence and timeout handling
-- Developed a drag-and-drop file upload interface with real-time validation
-- Built a responsive UI that works on desktop, tablet, and mobile devices
+- Implemented a robust WebGL-based molecular visualization system with multiple representation types
+- Created a comprehensive authentication system with token refresh and protected routes
+- Developed an advanced session management system with session listing and status monitoring
+- Implemented a full-featured WebSocket service for real-time updates with reconnection logic
+- Built a responsive UI with intuitive controls for molecular visualization
+- Created an extensible architecture based on React contexts and custom hooks
 - Implemented robust error handling with user-friendly notifications
-- Created an extensible architecture that can accommodate future features
 
 ### Next Steps
 
-- Implement unit and integration tests for frontend components
-- Add more advanced visualization options (ribbon, cartoon, surface representations)
-- Develop structure modification tools (atom/residue selection, measurement tools)
-- Enhance performance optimization for very large structures
-- Implement user preferences and persistent visualization settings
+- Expand documentation for the fallback visualization system
+- Add unit tests for the rendering components and ChimeraX client
+- Create end-to-end tests for visualization fallback scenarios
+- Further optimize Three.js rendering for very large structures
+- Implement user preferences for preferred rendering mode
+- Add accessibility enhancements for keyboard navigation and screen readers
+- Integrate advanced ChimeraX features when available
+- Add additional external rendering services as fallback options
+- Implement caching for static images to improve performance
+- Create detailed monitoring for rendering performance metrics

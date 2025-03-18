@@ -335,27 +335,66 @@ interface StructureProperties {
 }
 ```
 
-## Error Handling
+## Enhanced Error Handling
 
-The API uses standard HTTP status codes for error responses:
+The API implements a comprehensive error handling system with standardized responses across all endpoints:
 
-- 400: Bad Request - Invalid input parameters
-- 401: Unauthorized - Authentication required
-- 403: Forbidden - No access to the requested resource
-- 404: Not Found - Resource not found (session or structure)
-- 500: Internal Server Error - Unexpected server error
+### Error Types
 
-Error responses follow this format:
+- **400 Bad Request** (`ValidationError`): Invalid input parameters, format errors
+- **401 Unauthorized** (`AuthenticationError`): Missing or invalid authentication
+- **403 Forbidden** (`AuthorizationError`): Insufficient permissions
+- **404 Not Found** (`NotFoundError`): Resource not found (session, structure, version)
+- **409 Conflict** (`ConflictError`): Resource conflicts or duplicate resources
+- **429 Too Many Requests** (`RateLimitError`): Rate limit exceeded
+- **500 Internal Server Error** (`AppError`): Unexpected server error
+- **500 Storage Error** (`StorageError`): File storage or retrieval issues
+- **500 ChimeraX Error** (`ChimeraXError`): ChimeraX execution failures
+
+### Error Format
+
+Error responses follow this standardized format:
 
 ```json
 {
   "status": "error",
-  "error": {
-    "code": "ERROR_CODE",
-    "details": "Error message details"
+  "code": "ERROR_TYPE",
+  "message": "Human-readable error message",
+  "details": {
+    "requestId": "unique-request-identifier",
+    "field": "problematic-field",
+    "additionalContext": "contextual information",
+    "errors": ["specific error details"]
   }
 }
 ```
+
+### Validation Errors for Structure Files
+
+Structure-specific validation errors provide detailed information about file issues:
+
+```json
+{
+  "status": "error",
+  "code": "VALIDATION_ERROR",
+  "message": "Invalid structure file format",
+  "details": {
+    "format": "pdb",
+    "errors": [
+      "No ATOM records found in structure file"
+    ],
+    "warnings": [
+      "Missing HEADER record"
+    ],
+    "expectedFormat": "pdb",
+    "detectedFormat": "unknown"
+  }
+}
+```
+
+### Request Tracking
+
+All responses include a unique request ID for tracking and debugging purposes, especially useful for asynchronous operations or when diagnosing issues in production environments.
 
 ## Caching
 

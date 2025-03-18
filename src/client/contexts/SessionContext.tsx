@@ -5,14 +5,17 @@ import { Session, SessionContextProps, SessionStatus, ProviderProps } from '../t
 import { useError } from './ErrorContext';
 
 // Create context with default values
-const SessionContext = createContext<SessionContextProps>({
+export const SessionContext = createContext<SessionContextProps>({
   session: null,
+  activeSession: null,
+  sessions: [],
   isLoading: false,
   error: null,
   createSession: async () => null,
   getSession: async () => null,
   refreshSession: async () => false,
   closeSession: async () => false,
+  fetchSessions: async () => [],
   resetError: () => {},
 });
 
@@ -151,12 +154,15 @@ export const SessionProvider: React.FC<ProviderProps> = ({ children }) => {
   // Create the context value object
   const value: SessionContextProps = {
     session,
+    activeSession: session, // Add activeSession alias for compatibility
+    sessions: [session].filter(Boolean) as Session[], // Create sessions array with current session if it exists
     isLoading,
     error,
     createSession,
     getSession,
     refreshSession,
     closeSession,
+    fetchSessions: async () => [session].filter(Boolean) as Session[], // Add fetchSessions method that returns current session
     resetError,
   };
 

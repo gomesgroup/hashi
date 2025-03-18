@@ -447,6 +447,28 @@ The response is a binary file with the appropriate MIME type (video/mp4 or image
 | "secondary" | Color by secondary structure |
 | "custom" | Custom color scheme |
 
+## Rendering Fallback System
+
+The snapshot rendering system implements a multi-layered fallback approach to ensure images can always be generated, even when optimal rendering resources are not available:
+
+### Primary Rendering: OSMesa
+- Uses ChimeraX with OSMesa libraries for high-quality offscreen rendering
+- Provides the best visual quality and performance
+- Requires OSMesa libraries to be properly installed
+
+### Fallback 1: Xvfb
+- Uses a virtual X11 framebuffer (Xvfb) when OSMesa is not available
+- Still provides good quality rendering
+- Requires Xvfb to be properly configured (automatically handled in Docker)
+
+### Fallback 2: Placeholder Images
+- When both OSMesa and Xvfb rendering fail, generates placeholder images
+- Uses Node.js canvas library to create informative images
+- Shows molecular structure icon with error message
+- Ensures UI consistency even when rendering is completely unavailable
+
+The system automatically detects capabilities and chooses the appropriate rendering method. When rendering with primary or fallback methods fails, a descriptive message is provided in the snapshot status response.
+
 ## Error Handling
 
 Errors are returned with appropriate HTTP status codes and a JSON object with error details:
@@ -467,6 +489,9 @@ Common error codes:
 - `SNAPSHOT_FILE_NOT_FOUND`: Snapshot file not available or not yet rendered
 - `INVALID_PARAMETERS`: Invalid rendering parameters
 - `RENDERING_FAILED`: Rendering operation failed
+- `OSMESA_NOT_AVAILABLE`: OSMesa libraries required for optimal rendering are not available
+- `XVFB_NOT_AVAILABLE`: Xvfb fallback rendering is not available
+- `USING_PLACEHOLDER`: Rendering unavailable, using placeholder image instead
 - `MOVIE_NOT_FOUND`: Movie ID not found
 - `MOVIE_FILE_NOT_FOUND`: Movie file not available or not yet rendered
 - `SERVER_ERROR`: Internal server error

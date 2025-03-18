@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChimeraX Interactive UI Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        code {
+            display: block;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ChimeraX Interactive UI Test</h1>
+        <p>
+            This page provides direct access to the ChimeraX Interactive UI, bypassing the need for authentication.
+            Before accessing the ChimeraX UI, make sure the ChimeraX server is running.
+        </p>
+
+        <h2>1. Start ChimeraX server</h2>
+        <p>Run the following command in your terminal:</p>
+        <code>./run-interactive.sh</code>
+        <p>This should start the ChimeraX server at <strong>http://localhost:9876</strong>.</p>
+
+        <h2>2. Check server status</h2>
+        <div id="status" class="status info">Checking server status...</div>
+
+        <h2>3. Access ChimeraX UI</h2>
+        <a href="http://localhost:3001/chimerax" class="button" id="accessButton" target="_blank">Open ChimeraX Interactive UI</a>
+        <p>This will open the ChimeraX UI in a new tab.</p>
+
+        <h2>Troubleshooting</h2>
+        <ul>
+            <li>If the ChimeraX server is not running, start it with <code>./run-interactive.sh</code></li>
+            <li>If you get a "Connection refused" error, make sure the server is running and listening on port 9876</li>
+            <li>If you get a blank page, check the browser console for errors</li>
+            <li>If you're still having issues, try the fallback option within the ChimeraX UI which will use the RCSB viewer instead</li>
+        </ul>
+    </div>
+
+    <script>
+        // Check if ChimeraX server is running
+        async function checkServer() {
+            const statusElement = document.getElementById('status');
+            const accessButton = document.getElementById('accessButton');
+            
+            try {
+                const response = await fetch('http://localhost:9876/api/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        statusElement.className = 'status success';
+                        statusElement.textContent = 'ChimeraX server is running! You can now access the UI.';
+                        accessButton.style.display = 'inline-block';
+                    } else {
+                        statusElement.className = 'status error';
+                        statusElement.textContent = 'ChimeraX server returned an unexpected response.';
+                        accessButton.style.display = 'none';
+                    }
+                } else {
+                    statusElement.className = 'status error';
+                    statusElement.textContent = `Server returned ${response.status}: ${response.statusText}`;
+                    accessButton.style.display = 'none';
+                }
+            } catch (err) {
+                statusElement.className = 'status error';
+                statusElement.textContent = `Cannot connect to ChimeraX server: ${err.message}. Make sure the server is running with ./run-interactive.sh`;
+                accessButton.style.display = 'none';
+            }
+        }
+
+        // Check server on page load
+        window.addEventListener('load', checkServer);
+        
+        // Add button to manually check server
+        const statusElement = document.getElementById('status');
+        const checkButton = document.createElement('button');
+        checkButton.textContent = 'Check Again';
+        checkButton.className = 'button';
+        checkButton.addEventListener('click', checkServer);
+        statusElement.after(checkButton);
+    </script>
+</body>
+</html>

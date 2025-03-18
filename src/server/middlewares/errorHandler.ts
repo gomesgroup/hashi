@@ -1,54 +1,54 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
-
-export interface AppError extends Error {
-  statusCode?: number;
-  code?: string;
-  details?: unknown;
-}
+import { AppError, NotFoundError, ValidationError as CustomValidationError } from '../utils/errors';
+import { ValidationError as JoiValidationError } from 'joi';
 
 /**
- * ValidationError class for handling validation-related errors
+ * Middleware to handle 404 errors (routes not found)
  */
-export class ValidationError extends Error {
-  public statusCode: number;
-  public code: string;
-  
-  constructor(message: string, details?: unknown) {
-    super(message);
-    this.name = 'ValidationError';
-    this.statusCode = 400;
-    this.code = 'VALIDATION_ERROR';
-    this.details = details;
-    
-    // Ensure proper inheritance in TypeScript
-    Object.setPrototypeOf(this, ValidationError.prototype);
-  }
-}
-
 export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
-  const error: AppError = new Error(`Not Found - ${req.originalUrl}`);
-  error.statusCode = 404;
-  next(error);
+  next(new NotFoundError(`Not Found - ${req.originalUrl}`));
 };
 
-export const errorHandler = (err: AppError, req: Request, res: Response, _next: NextFunction) => {
-  const statusCode = err.statusCode || 500;
-  const errorCode = err.code || 'INTERNAL_SERVER_ERROR';
+/**
+ * Central error handling middleware
+ * Processes all errors and returns standardized error responses
+ */
+export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
+  let appError: AppError;
   
-  // Log the error
-  if (statusCode >= 500) {
-    logger.error(`${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+  // Convert various error types to AppError
+  if (err instanceof AppError) {
+    // Already an AppError instance
+    appError = err;
+  } else if (err instanceof JoiValidationError) {
+    // Convert Joi validation errors
+    appError = CustomValidationError.fromJoiError(err);
+  } else {
+    // Generic error conversion
+    appError = new AppError(
+      err.message || 'An unexpected error occurred',
+      500,
+      undefined,
+      undefined,
+      false // Non-operational errors
+    );
+  }
+  
+  // Log the error based on severity
+  if (appError.statusCode >= 500) {
+    logger.error(`${appError.statusCode} - ${appError.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
     logger.error(err.stack);
   } else {
-    logger.warn(`${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+    logger.warn(`${appError.statusCode} - ${appError.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
   }
 
-  res.status(statusCode).json({
+  // Send response
+  res.status(appError.statusCode).json({
     status: 'error',
-    code: errorCode,
-    message: err.message,
-    details: err.details,
+    code: appError.type,
+    message: appError.message,
+    details: appError.details,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };

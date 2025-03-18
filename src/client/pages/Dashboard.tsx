@@ -5,6 +5,7 @@ import { useSession } from '../contexts/SessionContext';
 import { structureService } from '../services/structureService';
 import LoadingIndicator from '../components/LoadingIndicator';
 import { Structure } from '../types';
+import axios from 'axios';
 
 const DashboardContainer = styled.div`
   padding: 20px;
@@ -70,6 +71,28 @@ const ActionButton = styled(Link)`
   }
 `;
 
+const StandaloneButton = styled.button`
+  display: inline-block;
+  background-color: var(--primary-color);
+  color: white;
+  padding: 10px 15px;
+  border-radius: var(--border-radius);
+  border: none;
+  cursor: pointer;
+  margin-right: 10px;
+  margin-top: 15px;
+  font-size: 1em;
+
+  &:hover {
+    background-color: #2980b9;
+  }
+  
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+`;
+
 const StructureList = styled.div`
   background-color: white;
   border-radius: var(--border-radius);
@@ -116,12 +139,42 @@ const ErrorText = styled.div`
   margin-top: 20px;
 `;
 
+const StatusBox = styled.div<{ status: 'success' | 'error' | 'loading' }>`
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 4px;
+  background-color: ${props => 
+    props.status === 'success' ? 'rgba(46, 204, 113, 0.1)' : 
+    props.status === 'error' ? 'rgba(231, 76, 60, 0.1)' : 'rgba(52, 152, 219, 0.1)'};
+  border: 1px solid ${props => 
+    props.status === 'success' ? 'rgba(46, 204, 113, 0.5)' : 
+    props.status === 'error' ? 'rgba(231, 76, 60, 0.5)' : 'rgba(52, 152, 219, 0.5)'};
+  color: ${props => 
+    props.status === 'success' ? '#27ae60' : 
+    props.status === 'error' ? '#c0392b' : '#2980b9'};
+`;
+
+const TestSection = styled.div`
+  background-color: white;
+  border-radius: var(--border-radius);
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: var(--box-shadow);
+`;
+
 const Dashboard: React.FC = () => {
   const { session } = useSession();
   const [structures, setStructures] = useState<Structure[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  
+  // Standalone server status
+  const [backendStatus, setBackendStatus] = useState<'success' | 'error' | 'loading'>('loading');
+  const [statusMessage, setStatusMessage] = useState('Checking standalone server connection...');
+  const [chimeraxStatus, setChimeraxStatus] = useState<any>(null);
+  
+  const STANDALONE_URL = 'http://localhost:9876/api';
+  
   useEffect(() => {
     const fetchStructures = async () => {
       if (!session) return;
@@ -140,7 +193,73 @@ const Dashboard: React.FC = () => {
     };
 
     fetchStructures();
+    checkStandaloneConnection();
   }, [session]);
+  
+  const checkStandaloneConnection = async () => {
+    try {
+      setBackendStatus('loading');
+      setStatusMessage('Checking standalone server connection...');
+      
+      const response = await axios.get(`${STANDALONE_URL}/health`);
+      
+      if (response.data.status === 'success') {
+        setBackendStatus('success');
+        setStatusMessage(`Connected to standalone server: ${response.data.message}`);
+        
+        // Also check ChimeraX status
+        getChimeraxStatus();
+      } else {
+        setBackendStatus('error');
+        setStatusMessage('Standalone server returned unexpected response');
+      }
+    } catch (error) {
+      console.error('Standalone server connection error:', error);
+      setBackendStatus('error');
+      setStatusMessage('Failed to connect to standalone server. Make sure it\'s running on http://localhost:9876');
+    }
+  };
+  
+  const getChimeraxStatus = async () => {
+    try {
+      const response = await axios.get(`${STANDALONE_URL}/chimerax/status`);
+      setChimeraxStatus(response.data);
+    } catch (error) {
+      console.error('Failed to get ChimeraX status:', error);
+    }
+  };
+  
+  const startChimeraX = async () => {
+    try {
+      const response = await axios.post(`${STANDALONE_URL}/chimerax/start`);
+      console.log('ChimeraX start response:', response.data);
+      getChimeraxStatus();
+    } catch (error) {
+      console.error('Failed to start ChimeraX:', error);
+    }
+  };
+  
+  const stopChimeraX = async () => {
+    try {
+      const response = await axios.post(`${STANDALONE_URL}/chimerax/stop`);
+      console.log('ChimeraX stop response:', response.data);
+      getChimeraxStatus();
+    } catch (error) {
+      console.error('Failed to stop ChimeraX:', error);
+    }
+  };
+  
+  const executeCommand = async () => {
+    try {
+      const command = 'open 1abc';
+      const response = await axios.post(`${STANDALONE_URL}/chimerax/command`, { command });
+      console.log('ChimeraX command response:', response.data);
+      alert(`Command sent to ChimeraX: ${command}`);
+    } catch (error) {
+      console.error('Failed to execute ChimeraX command:', error);
+      alert(`Failed to execute command: ${(error as any).message}`);
+    }
+  };
 
   if (!session) {
     return <LoadingIndicator fullScreen />;
@@ -174,6 +293,54 @@ const Dashboard: React.FC = () => {
           </Card>
         </Grid>
       </WelcomeSection>
+      
+      <TestSection>
+        <Title>Standalone Server Test</Title>
+        <Subtitle>Test connection to the standalone server running on port 9876</Subtitle>
+        
+        <StatusBox status={backendStatus}>
+          {statusMessage}
+        </StatusBox>
+        
+        <StandaloneButton onClick={checkStandaloneConnection}>Refresh Status</StandaloneButton>
+        
+        {backendStatus === 'success' && (
+          <>
+            <h2>ChimeraX Status</h2>
+            {chimeraxStatus ? (
+              <div>
+                <p><strong>Running:</strong> {chimeraxStatus.running ? 'Yes' : 'No'}</p>
+                {chimeraxStatus.running && <p><strong>PID:</strong> {chimeraxStatus.pid}</p>}
+                <p><strong>Path:</strong> {chimeraxStatus.chimeraxPath}</p>
+              </div>
+            ) : (
+              <p>Loading ChimeraX status...</p>
+            )}
+            
+            <h2>ChimeraX Controls</h2>
+            <StandaloneButton 
+              onClick={startChimeraX} 
+              disabled={chimeraxStatus?.running}
+            >
+              Start ChimeraX
+            </StandaloneButton>
+            
+            <StandaloneButton 
+              onClick={stopChimeraX} 
+              disabled={!chimeraxStatus?.running}
+            >
+              Stop ChimeraX
+            </StandaloneButton>
+            
+            <StandaloneButton 
+              onClick={executeCommand} 
+              disabled={!chimeraxStatus?.running}
+            >
+              Open PDB 1abc (Test Command)
+            </StandaloneButton>
+          </>
+        )}
+      </TestSection>
 
       <StructureList>
         <Title>Your Structures</Title>
